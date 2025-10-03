@@ -255,7 +255,7 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, apiKeys }) => {
                 id="durationInSeconds"
                 name="durationInSeconds"
                 min="60"
-                max="600"
+                max="1200"
                 step="15"
                 value={formData.durationInSeconds}
                 onChange={handleChange}
@@ -263,7 +263,7 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, apiKeys }) => {
             />
              <div className="flex justify-between text-xs text-slate-400 mt-1">
                 <span>1 min</span>
-                <span>10 mins</span>
+                <span>20 mins</span>
             </div>
             <p className="text-xs text-slate-500 mt-2 text-center">
                 Note: The final script length is an AI estimate and may vary by +/- 1 minute to ensure a natural story pace.

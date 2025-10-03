@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { UserInput, CharacterProfile, StoryboardData, AspectRatio } from '../types';
+import { UserInput, CharacterProfile, StoryboardData, AspectRatio, Scene } from '../types';
 
 // Simple round-robin to cycle through multiple API keys for better rate limiting.
 let keyIndex = 0;
@@ -18,6 +18,26 @@ const safetyInstruction = `
     All content, including character descriptions, actions, dialogue, and visual elements, must be appropriate for a general, family-friendly audience.
     If a user prompt can be interpreted in multiple ways, you must always choose the safest and most positive interpretation. Avoid any controversial or sensitive topics.
 `;
+
+/**
+ * Splits a script into smaller chunks based on a target word count.
+ * This is crucial for processing long scripts without losing context or consistency.
+ */
+function chunkScript(script: string, chunkSizeInWords: number): string[] {
+    const words = script.split(/\s+/);
+    const chunks: string[] = [];
+    if (words.length === 0 || (words.length === 1 && words[0] === '')) {
+        return [];
+    }
+
+    for (let i = 0; i < words.length; i += chunkSizeInWords) {
+        const chunk = words.slice(i, i + chunkSizeInWords);
+        chunks.push(chunk.join(' '));
+    }
+    
+    return chunks;
+}
+
 
 /**
  * A helper function to call the Gemini API with a structured JSON response.
@@ -176,7 +196,7 @@ export const generateCharacterProfile = async (userInput: UserInput, apiKeys: st
 export const generateMasterScript = async (userInput: UserInput, characterProfile: CharacterProfile, apiKeys: string[]): Promise<string> => {
     const wordsPerSecond = 1.625; // Based on 13 words per 8-second scene for accurate pacing.
     const targetWordCount = Math.round(userInput.durationInSeconds * wordsPerSecond);
-    const varianceInSeconds = 30; // A tighter variance of +/- 30 seconds.
+    const varianceInSeconds = 60; // Increased variance for longer scripts, +/- 1 minute.
     const minWordCount = Math.max(30, Math.round((userInput.durationInSeconds - varianceInSeconds) * wordsPerSecond));
     const maxWordCount = Math.round((userInput.durationInSeconds + varianceInSeconds) * wordsPerSecond);
 
@@ -253,37 +273,42 @@ export const generateMasterScript = async (userInput: UserInput, characterProfil
 
 
 export const breakdownScriptIntoScenes = async (userInput: UserInput, characterProfile: CharacterProfile, masterScript: string, apiKeys: string[]): Promise<StoryboardData> => {
-    const prompt = `
-        You are an expert AI Video Director. Your task is to read the provided Master Script and break it down into a series of detailed scenes for a video. You will also generate promotional content.
+    // Step 1: Define "The Director's Bible" - the single source of truth for consistency.
+    const directorsBible = `
+        **THE DIRECTOR'S BIBLE (NON-NEGOTIABLE RULES):**
+        This is the source of truth for the entire project. Adhere to it strictly in every single scene you generate.
 
-        **Master Script (Source of Truth):**
-        ---
-        ${masterScript}
-        ---
+        1.  **Core Concept:**
+            - Style: ${userInput.videoStyle} video, ${userInput.imageStyle} visuals, ${userInput.writingStyle} tone.
+            - Language: ${userInput.language}
+            - Aspect Ratio: ${userInput.aspectRatio}
 
-        **Core Concept:**
-        - Style: ${userInput.videoStyle} video, ${userInput.imageStyle} visuals, ${userInput.writingStyle} tone.
-        - Characters, Setting & Voices Profile: ${JSON.stringify(characterProfile)}
-        - Language: ${userInput.language}
-        - Aspect Ratio: ${userInput.aspectRatio}
+        2.  **Locked Character & Setting Profiles (Source of Visual Truth):**
+            - Profile: ${JSON.stringify(characterProfile)}
+            - **CRITICAL CONSISTENCY RULE:** For the 'master_description' field, find the character speaking or acting in the scene and insert their FULL, UNCHANGED description from this Profile. If no specific character is active (e.g., narrator-only scene), use the Setting's description.
 
-        **Instructions:**
-        1.  **Scene Breakdown:**
-            - Read the Master Script carefully. It may follow a structured format (Hook, Context, Analysis, etc.). Your breakdown must preserve this narrative flow. Translate every key action, line of dialogue, and piece of narration into its own distinct scene. It is CRITICAL to follow the script's flow.
-            - For each scene, create a structured JSON prompt that follows the specified schema EXACTLY.
-            - **CRITICAL CONSISTENCY RULE:** For the 'master_description' field, find the character speaking or acting in the scene and insert their FULL, UNCHANGED description from the Character Profile provided above. If no specific character is active (e.g., narrator-only scene), use the Setting's description. This is the source of truth for visual consistency.
-            - **CRITICAL TRANSLATION RULE:** The 'scene_description' must be a VISUAL description of the action happening in that specific part of the script.
-            - The 'dialogue_line' and 'dialogue_character' fields must be COPIED EXACTLY from the master script. Use "Narrator" for narration parts.
-            - **CRITICAL VOICE CONSISTENCY:** For the 'voice_model' field, you MUST find the character speaking ('dialogue_character') and use the exact voice model name assigned to them in the Character Profile above. If the speaker is "Narrator", use the assigned 'narratorVoice'. This is NON-NEGOTIABLE for audio consistency.
-            - **CRITICAL DIALOGUE LENGTH RULE:** A single scene's 'dialogue_line' MUST NOT exceed 13 words. If a line of dialogue or narration from the Master Script is longer than 13 words, you MUST split it into multiple consecutive scenes. Each of these new scenes will contain a segment of the original line (max 13 words). The visual description ('scene_description') for these consecutive scenes should remain consistent to show a continuous action while the dialogue is spoken. This is essential for balancing pacing and JSON processing.
-            - **PROFESSIONAL CINEMATOGRAPHY:** For the 'camera_shot' field, suggest a professional camera shot that would best capture the moment (e.g., "Close-up on the character's reaction", "Wide establishing shot of the city", "Dynamic tracking shot following the action", "Point of View (POV) shot").
+        3.  **Locked Voices (Source of Audio Truth):**
+            - **CRITICAL VOICE CONSISTENCY:** For the 'voice_model' field, you MUST find the character speaking ('dialogue_character') and use the exact voice model name assigned to them in the Character Profile above. If the speaker is "Narrator", use the assigned 'narratorVoice'.
+
+        4.  **Core Cinematic & Style Rules:**
             - **ABSOLUTELY CRITICAL STYLE RULE:** The 'style_notes' field is the most important instruction for visual generation. It MUST be a detailed string that explicitly defines the visual characteristics of both the video and image style. This exact string will be used to generate the visuals, so it must be comprehensive and accurate. Example: "Video Style: Cinematic, Image Style: Cinematic - characterized by high-contrast lighting, deep shadows, smooth camera movements, and a shallow depth of field." This note must be applied UNIFORMLY to EVERY scene without fail.
+            - **PROFESSIONAL CINEMATOGRAPHY:** For the 'camera_shot' field, suggest a professional camera shot that would best capture the moment (e.g., "Close-up on the character's reaction", "Wide establishing shot of the city", "Dynamic tracking shot following the action", "Point of View (POV) shot").
             - **CRITICAL AUDIO RULE:** For the 'audio_description', write a brief, narrative description of the scene's soundscape based on the script's context. Example: 'A gentle wind rustles through dry autumn leaves, creating a soft, whispering soundscape.'
-        2.  **Promotional Content:** Generate promotional materials in ${userInput.language} based on the overall story.
+            - **CRITICAL DIALOGUE LENGTH RULE:** A single scene's 'dialogue_line' MUST NOT exceed 13 words. If a line of dialogue or narration from the Master Script is longer than 13 words, you MUST split it into multiple consecutive scenes. Each of these new scenes will contain a segment of the original line (max 13 words).
 
-        Return ONLY a single, valid JSON object that strictly follows the provided schema. Before finalizing the JSON, double-check that EVERY single scene's 'style_notes' field is correctly populated and consistent with the user's initial request. Ensure all text is in ${userInput.language}.
+        5.  **CRITICAL CINEMATIC RULE FOR LONG DIALOGUE:**
+            - When a line of dialogue or narration from the Master Script is longer than 13 words and you must split it into multiple consecutive scenes, you **MUST NOT** repeat the 'scene_description' and 'camera_shot' identically.
+            - Instead, treat this as a mini-sequence and apply cinematic techniques to make it dynamic:
+                - **Vary Camera Shots:** Start with a medium shot, then cut to a close-up on the next line to emphasize emotion.
+                - **Use Reaction Shots:** If another character is present, cut to their reaction.
+                - **Use Cutaways:** If the dialogue describes an object or place, show a shot of that object/place.
+                - **Introduce Subtle Actions:** Have the character perform a small action (e.g., sip coffee, look away) and describe it in the 'scene_description'.
+            - **The goal is for each consecutive scene to offer a slightly different visual perspective, even as the same character continues speaking.**
+
+        **--- END OF DIRECTOR'S BIBLE ---**
     `;
-    
+
+    // Schemas for API calls, derived from the original storyboardSchema
      const scenePromptSchema = {
         type: Type.OBJECT,
         properties: {
@@ -308,7 +333,7 @@ export const breakdownScriptIntoScenes = async (userInput: UserInput, characterP
         required: ["scene_context", "character_name", "master_description", "scene_description", "audio_description", "style_notes", "camera_shot", "voice_model"]
      };
 
-    const storyboardSchema = {
+    const scenesSchema = {
         type: Type.OBJECT,
         properties: {
             scenes: {
@@ -322,43 +347,99 @@ export const breakdownScriptIntoScenes = async (userInput: UserInput, characterP
                     },
                     required: ["scene_number", "act", "scene_prompt_json"]
                 }
-            },
-            promotional_content: {
-                type: Type.OBJECT,
-                properties: {
-                    thumbnail_prompt: { type: Type.STRING },
-                    youtube: {
-                        type: Type.OBJECT,
-                        properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, hashtags: { type: Type.STRING } },
-                        required: ["title", "description", "hashtags"]
-                    },
-                    facebook: {
-                        type: Type.OBJECT,
-                        properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, hashtags: { type: Type.STRING } },
-                        required: ["title", "description", "hashtags"]
-                    },
-                    tiktok: {
-                        type: Type.OBJECT,
-                        properties: { caption: { type: Type.STRING }, hashtags: { type: Type.STRING } },
-                        required: ["caption", "hashtags"]
-                    }
-                },
-                required: ["thumbnail_prompt", "youtube", "facebook", "tiktok"]
             }
         },
-        // 'master_script' is not part of the AI's response, it's an input.
-        // We will handle 'scenes' and 'promotional_content' from the AI.
-        required: ["scenes", "promotional_content"] 
+        required: ["scenes"]
     };
 
-    // We expect the AI to return an object with 'scenes' and 'promotional_content'.
-    // The master_script is handled in the App component.
-    type AiResponse = Omit<StoryboardData, 'master_script'>;
+    const promotionalContentSchema = {
+        type: Type.OBJECT,
+        properties: {
+            thumbnail_prompt: { type: Type.STRING },
+            youtube: {
+                type: Type.OBJECT,
+                properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, hashtags: { type: Type.STRING } },
+                required: ["title", "description", "hashtags"]
+            },
+            facebook: {
+                type: Type.OBJECT,
+                properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, hashtags: { type: Type.STRING } },
+                required: ["title", "description", "hashtags"]
+            },
+            tiktok: {
+                type: Type.OBJECT,
+                properties: { caption: { type: Type.STRING }, hashtags: { type: Type.STRING } },
+                required: ["caption", "hashtags"]
+            }
+        },
+        required: ["thumbnail_prompt", "youtube", "facebook", "tiktok"]
+    };
 
-    return generateJson<AiResponse>(prompt, storyboardSchema, apiKeys).then(response => ({
-        ...response,
-        master_script: masterScript // We re-attach the master script here for the final StoryboardData object
-    }));
+    // Step 2: Split the script into manageable chunks to ensure consistency
+    const SCRIPT_CHUNK_SIZE_IN_WORDS = 350;
+    const scriptChunks = chunkScript(masterScript, SCRIPT_CHUNK_SIZE_IN_WORDS);
+    
+    // Step 3: Process each chunk to get scenes concurrently
+    const scenePromises = scriptChunks.map(chunk => {
+        const prompt = `
+            ${directorsBible}
+
+            **Your Task:**
+            Your task is to act as an AI Video Director. Read the provided SCRIPT CHUNK below and break it down into a series of detailed scenes.
+            You MUST follow all rules in The Director's Bible.
+            The script provided is only a small part of a larger story. Only process the chunk provided.
+
+            **SCRIPT CHUNK:**
+            ---
+            ${chunk}
+            ---
+
+            **Instructions:**
+            1.  Break down the SCRIPT CHUNK into scenes, preserving the narrative flow.
+            2.  Translate every key action, line of dialogue, and piece of narration into its own distinct scene.
+            3.  Return ONLY a single, valid JSON object that strictly follows the provided schema, containing an array of the scenes you generated for this chunk. Ensure all text is in ${userInput.language}.
+        `;
+        type SceneResponse = { scenes: Scene[] };
+        return generateJson<SceneResponse>(prompt, scenesSchema, apiKeys);
+    });
+
+    // Step 4: Generate promotional content in parallel using the full script
+    const promoPrompt = `
+        ${directorsBible}
+
+        **Your Task:**
+        You are an AI Marketing Specialist. Read the ENTIRE Master Script below and generate compelling promotional content for it.
+
+        **Master Script (Full Context):**
+        ---
+        ${masterScript}
+        ---
+
+        **Instructions:**
+        Generate promotional materials in ${userInput.language} based on the overall story.
+        Return ONLY a single, valid JSON object that strictly follows the provided schema for promotional content.
+    `;
+    
+    type PromoResponse = { promotional_content: StoryboardData['promotional_content'] };
+    const promoPromise = generateJson<PromoResponse>(promoPrompt, {
+        type: Type.OBJECT,
+        properties: { promotional_content: promotionalContentSchema },
+        required: ["promotional_content"]
+    }, apiKeys);
+
+    // Step 5: Await all promises and combine the results
+    const [chunkedSceneResults, promoResponse] = await Promise.all([
+        Promise.all(scenePromises),
+        promoPromise
+    ]);
+
+    const allScenes = chunkedSceneResults.flatMap(result => result.scenes || []);
+
+    return {
+        scenes: allScenes,
+        promotional_content: promoResponse.promotional_content,
+        master_script: masterScript
+    };
 };
 
 
