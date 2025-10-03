@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { UserInput, AspectRatio } from '../types';
 import { MagicIcon } from './icons/MagicIcon';
@@ -27,6 +28,8 @@ const channelTypeOptions: { en: string; vi: string }[] = [
 ];
 
 const styleOptions: { en: string; vi: string }[] = [
+  { en: '2D Animation', vi: 'Hoạt hình 2D' },
+  { en: '3D Animation', vi: 'Hoạt hình 3D' },
   { en: 'Abstract', vi: 'Trừu tượng' },
   { en: 'Anime', vi: 'Anime' },
   { en: 'Brand Storytelling Video', vi: 'Video Kể Chuyện Thương Hiệu' },
@@ -55,12 +58,15 @@ const styleOptions: { en: string; vi: string }[] = [
   { en: 'Horror', vi: 'Kinh dị' },
   { en: 'Inspirational & Motivational', vi: 'Truyền cảm hứng & Động lực' },
   { en: 'Journalistic & Objective', vi: 'Báo chí & Khách quan' },
+  { en: 'Manga (Japanese)', vi: 'Manga (Nhật Bản)' },
+  { en: 'Manhwa (Korean)', vi: 'Manhwa (Hàn Quốc)' },
   { en: 'Minimalist', vi: 'Tối giản' },
   { en: 'Minimalist & Clean', vi: 'Tối giản & Sạch sẽ' },
   { en: 'Music Video', vi: 'Video Âm nhạc' },
   { en: 'Nature', vi: 'Thiên nhiên' },
   { en: 'Noir', vi: 'Phim Đen (Noir)' },
   { en: 'Noir Film Look', vi: 'Phong cách Phim Đen' },
+  { en: 'Novel', vi: 'Tiểu thuyết' },
   { en: 'Pixar Animation', vi: 'Hoạt hình Pixar' },
   { en: 'Poetic & Artistic', vi: 'Thơ ca & Nghệ thuật' },
   { en: 'Pop Art', vi: 'Nghệ thuật Pop' },
