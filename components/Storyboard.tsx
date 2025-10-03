@@ -4,6 +4,7 @@ import { StoryboardData, Scene, UserInput, CharacterProfile } from '../types';
 import SceneCard from './SceneCard';
 import PromotionalContent from './PromotionalContent';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { DownloadIcon } from './icons/DownloadIcon';
 
 const formatDurationDisplay = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -152,6 +153,41 @@ const Storyboard: React.FC<StoryboardProps> = ({ storyboardData, userInput, char
 
   const availableActs = useMemo(() => Object.keys(scenesByAct).map(Number).sort((a,b) => a - b), [scenesByAct]);
 
+  const handleDownloadScenesJson = () => {
+    if (!storyboardData || !userInput) return;
+
+    // For each scene, stringify its JSON prompt into a single line.
+    // Then join all lines with a newline character.
+    const textContent = storyboardData.scenes
+        .map(scene => JSON.stringify(scene.scene_prompt_json))
+        .join('\n');
+
+    const createSafeFilename = (title: string): string => {
+        if (!title) {
+            return 'vira_script_scenes';
+        }
+        return title
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 60) || 'vira_script_scenes';
+    };
+
+    const filename = `${createSafeFilename(userInput.topic)}_scenes.txt`;
+
+    const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+
   return (
     <div className="max-w-7xl mx-auto">
         <div className="text-center mb-10">
@@ -193,12 +229,19 @@ const Storyboard: React.FC<StoryboardProps> = ({ storyboardData, userInput, char
             </div>
         </div>
 
-        <div className="text-center mt-16">
+        <div className="text-center mt-16 flex flex-col sm:flex-row gap-4 justify-center">
             <button
                 onClick={onRestart}
                 className="px-8 py-3 bg-slate-700 text-white font-bold rounded-lg hover:bg-slate-600 transition-colors"
             >
                 Create a New Project
+            </button>
+            <button
+                onClick={handleDownloadScenesJson}
+                className="flex items-center justify-center gap-2 px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-500 transition-colors"
+            >
+                <DownloadIcon className="w-5 h-5" />
+                Download Scenes JSON
             </button>
         </div>
     </div>
