@@ -2,7 +2,16 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { UserInput, CharacterProfile, StoryboardData, AspectRatio, Scene } from '../types';
 
 // Simple round-robin to cycle through multiple API keys for better rate limiting.
-let keyIndex = 0;
+export let keyIndex = 0;
+export const apiKeyStatuses = new Map<string, 'active' | 'failed'>();
+
+export const initializeKeys = (keys: string[]) => {
+  keyIndex = 0;
+  apiKeyStatuses.clear();
+  keys.forEach(key => apiKeyStatuses.set(key, 'active'));
+};
+
+
 const getAiClient = (apiKeys: string[]): GoogleGenAI => {
   if (!apiKeys || apiKeys.length === 0) {
     throw new Error("API key is not configured.");
@@ -23,11 +32,11 @@ const safetyInstruction = `
 
 const voiceModelMap: Record<string, Record<string, string>> = {
   English: {
-    'Zephyr': 'en-US-Wavenet-F', // Female
-    'Puck': 'en-GB-Neural2-D',   // Male
-    'Charon': 'en-US-Wavenet-D', // Male
-    'Kore': 'en-AU-Wavenet-C',   // Female
-    'Fenrir': 'en-IN-Wavenet-D',   // Male
+    'Zephyr (Female US)': 'en-US-Wavenet-F',
+    'Kore (Female US)': 'en-US-Wavenet-E',
+    'Puck (Male US)': 'en-US-Wavenet-B',
+    'Charon (Male US)': 'en-US-Wavenet-D',
+    'Fenrir (Male US)': 'en-US-Wavenet-A',
   },
   Vietnamese: {
     'Linh (Nữ Miền Bắc)': 'vi-VN-Wavenet-A',
@@ -48,8 +57,9 @@ const promptLocalizations = {
         generateCharacterProfile: (userInput: UserInput, availableVoices: string) => `
             Create a character profile for a short video based on the following user input.
             The profile must include 2-3 main characters and one primary setting.
-            For each character, provide a name and a detailed, visually-rich description focusing on specific, non-negotiable "visual anchors": facial features, hair style/color, signature wardrobe, and body type. This description is CRITICAL for generating consistent character images later. ALSO, assign a distinct voice for each character from the following available list: ${availableVoices}.
-            Finally, assign a voice for the Narrator as well, which can be the same as a character's voice but it's better if it's unique.
+            For each character, provide a name and a detailed description that implies their gender (male or female). Also provide a visually-rich description focusing on specific, non-negotiable "visual anchors": facial features, hair style/color, signature wardrobe, and body type. This description is CRITICAL for generating consistent character images later.
+            CRITICAL VOICE CASTING RULE: You MUST assign a distinct voice for each character from the following available list. The voice MUST match the character's implied gender. For example, a male character must be assigned a voice with "(Male)" in its name. Available Voices: ${availableVoices}.
+            Finally, you MUST assign a MALE voice for the Narrator. The narrator's voice should be chosen from one of the "(Male)" options in the list.
 
             User Input:
             - Topic: ${userInput.topic}
@@ -184,8 +194,9 @@ const promptLocalizations = {
         generateCharacterProfile: (userInput: UserInput, availableVoices: string) => `
             Tạo hồ sơ nhân vật cho một video ngắn dựa trên thông tin người dùng sau đây.
             Hồ sơ phải bao gồm 2-3 nhân vật chính và một bối cảnh chính.
-            Đối với mỗi nhân vật, hãy cung cấp tên và mô tả chi tiết, giàu hình ảnh, tập trung vào các "đặc điểm nhận dạng" cụ thể, không thể thay đổi: nét mặt, kiểu/màu tóc, trang phục đặc trưng và dáng người. Mô tả này CỰC KỲ QUAN TRỌNG để tạo ra hình ảnh nhân vật nhất quán sau này. ĐỒNG THỜI, hãy gán một giọng nói riêng biệt cho mỗi nhân vật từ danh sách có sẵn sau: ${availableVoices}.
-            Cuối cùng, hãy gán một giọng nói cho Người Dẫn Chuyện, có thể trùng với giọng nhân vật nhưng tốt hơn là một giọng riêng.
+            Đối với mỗi nhân vật, hãy cung cấp tên và một mô tả chi tiết ngụ ý giới tính của họ (nam hoặc nữ). Đồng thời cung cấp mô tả giàu hình ảnh, tập trung vào các "đặc điểm nhận dạng" cụ thể, không thể thay đổi: nét mặt, kiểu/màu tóc, trang phục đặc trưng và dáng người. Mô tả này CỰC KỲ QUAN TRỌNG để tạo ra hình ảnh nhân vật nhất quán sau này.
+            QUY TẮC CHỌN GIỌNG NÓI TỐI QUAN TRỌNG: Bạn PHẢI gán một giọng nói riêng biệt cho mỗi nhân vật từ danh sách có sẵn sau. Giọng nói PHẢI khớp với giới tính ngụ ý của nhân vật. Ví dụ, một nhân vật nam phải được gán một giọng nói có chữ "(Nam)" trong tên. Danh sách giọng nói có sẵn: ${availableVoices}.
+            Cuối cùng, bạn PHẢI gán một giọng NAM cho Người Dẫn Chuyện. Giọng của người dẫn chuyện nên được chọn từ một trong các tùy chọn có "(Nam)" trong danh sách.
 
             Thông tin người dùng:
             - Chủ đề: ${userInput.topic}
@@ -210,7 +221,7 @@ const promptLocalizations = {
             **YÊU CẦU THỜI LƯỢNG TUYỆT ĐỐI QUAN TRỌNG:**
             Tổng số từ của kịch bản cuối cùng (bao gồm tất cả lời dẫn và hội thoại) PHẢI được viết để khớp với thời lượng video là **${userInput.durationInSeconds} giây**.
             - SỐ TỪ MỤC TIÊU: **${targetWordCount} từ**. (Dựa trên tính toán chính xác ${wordsPerSecond} từ mỗi giây để có nhịp độ lý tưởng).
-            - PHẠM VI CHẤP NHẬN ĐƯỢC: Kịch bản cuối cùng của bạn phải có số từ trong khoảng từ **${minWordCount}** đến **${maxWordCount}** từ.
+            - PHẠM VI CHẤP NHẬN ĐƯỢỢC: Kịch bản cuối cùng của bạn phải có số từ trong khoảng từ **${minWordCount}** đến **${maxWordCount}** từ.
             - Đây KHÔNG phải là một gợi ý, mà là một ràng buộc cứng. Bạn phải cẩn thận điều chỉnh nhịp độ câu chuyện, lời dẫn và hội thoại để đạt được độ dài này.
             - **KIỂM TRA CUỐI CÙNG:** Trước khi xuất ra kịch bản cuối cùng, bạn phải thực hiện đếm từ nội bộ. Nếu kịch bản nằm ngoài phạm vi cho phép từ ${minWordCount} đến ${maxWordCount} từ, bạn PHẢI viết lại cho đến khi tuân thủ. Mục tiêu chính của bạn là đáp ứng yêu cầu về thời lượng này.
 
@@ -373,7 +384,9 @@ const generateJson = async <T>(
             const jsonText = response.text.trim();
             return JSON.parse(jsonText) as T;
         } catch (error) {
-            console.error(`API call failed with key index ${keyIndex - 1}:`, error);
+            const failedKey = apiKeys[(keyIndex - 1 + apiKeys.length) % apiKeys.length];
+            apiKeyStatuses.set(failedKey, 'failed');
+            console.error(`API call failed with key index ${(keyIndex - 1 + apiKeys.length) % apiKeys.length} (${failedKey}):`, error);
             lastError = error instanceof Error ? error : new Error(String(error));
             if (keyIndex === initialKeyIndex) {
                  break;
@@ -406,9 +419,13 @@ const generateText = async (
                     systemInstruction: safetyInstruction,
                 },
             });
-            return response.text;
+            // FIX: Add a safeguard. If response.text is undefined for any reason,
+            // return an empty string to prevent downstream crashes.
+            return response.text || '';
         } catch (error) {
-            console.error(`API call failed with key index ${keyIndex - 1}:`, error);
+            const failedKey = apiKeys[(keyIndex - 1 + apiKeys.length) % apiKeys.length];
+            apiKeyStatuses.set(failedKey, 'failed');
+            console.error(`API call failed with key index ${(keyIndex - 1 + apiKeys.length) % apiKeys.length} (${failedKey}):`, error);
             lastError = error instanceof Error ? error : new Error(String(error));
             if (keyIndex === initialKeyIndex) {
                  break;
@@ -670,7 +687,9 @@ export const generateImage = async (prompt: string, aspectRatio: AspectRatio, ap
             const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
             return base64ImageBytes;
         } catch (error) {
-            console.error(`Image generation failed with key index ${keyIndex - 1}:`, error);
+            const failedKey = apiKeys[(keyIndex - 1 + apiKeys.length) % apiKeys.length];
+            apiKeyStatuses.set(failedKey, 'failed');
+            console.error(`Image generation failed with key index ${(keyIndex - 1 + apiKeys.length) % apiKeys.length} (${failedKey}):`, error);
             lastError = error instanceof Error ? error : new Error(String(error));
             if (keyIndex === initialKeyIndex) {
                  break;

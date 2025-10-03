@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { AppStage, UserInput, CharacterProfile, StoryboardData, Scene } from './types';
-import { generateCharacterProfile, generateMasterScript, breakdownScriptIntoScenes } from './services/geminiService';
+import { generateCharacterProfile, generateMasterScript, breakdownScriptIntoScenes, initializeKeys, apiKeyStatuses, keyIndex } from './services/geminiService';
 
 import Header from './components/Header';
 import ApiKeyInput from './components/ApiKeyInput';
@@ -8,6 +8,7 @@ import InputForm from './components/InputForm';
 import CharacterReview from './components/CharacterReview';
 import Storyboard from './components/Storyboard';
 import Spinner from './components/Spinner';
+import Footer from './components/Footer';
 
 const App: React.FC = () => {
   const [apiKeys, setApiKeys] = useState<string[]>([]);
@@ -19,6 +20,7 @@ const App: React.FC = () => {
   const [userInput, setUserInput] = useState<UserInput | null>(null);
   const [characterProfile, setCharacterProfile] = useState<CharacterProfile | null>(null);
   const [storyboardData, setStoryboardData] = useState<StoryboardData | null>(null);
+  const [statusRefresh, setStatusRefresh] = useState(0);
   
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
@@ -28,6 +30,11 @@ const App: React.FC = () => {
 
   const handleApiKeySubmit = (keys: string[]) => {
     setApiKeys(keys);
+    initializeKeys(keys);
+  };
+  
+  const handleManageKeys = () => {
+    setApiKeys([]);
   };
 
   const handleInputFormSubmit = useCallback(async (data: UserInput) => {
@@ -44,6 +51,7 @@ const App: React.FC = () => {
       handleError(err instanceof Error ? err.message : 'Failed to generate character profile.');
     } finally {
       setIsLoading(false);
+      setStatusRefresh(s => s + 1);
     }
   }, [apiKeys]);
 
@@ -59,6 +67,7 @@ const App: React.FC = () => {
       handleError(err instanceof Error ? err.message : 'Failed to regenerate character profile.');
     } finally {
       setIsLoading(false);
+      setStatusRefresh(s => s + 1);
     }
   }, [userInput, apiKeys]);
   
@@ -97,6 +106,7 @@ const App: React.FC = () => {
       handleError(err instanceof Error ? err.message : 'Failed to generate storyboard.');
     } finally {
       setIsLoading(false);
+      setStatusRefresh(s => s + 1);
     }
   }, [userInput, apiKeys]);
 
@@ -179,11 +189,18 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="bg-slate-900 min-h-screen text-slate-200 font-sans">
-      <Header />
-      <main className="container mx-auto px-4 py-8 md:py-12">
+    <div className="bg-slate-900 min-h-screen text-slate-200 font-sans flex flex-col">
+      <Header 
+        key={statusRefresh}
+        apiKeys={apiKeys} 
+        onManageKeys={handleManageKeys}
+        statuses={apiKeyStatuses}
+        nextKeyIndex={keyIndex}
+      />
+      <main className="container mx-auto px-4 py-8 md:py-12 flex-grow">
         {renderContent()}
       </main>
+      <Footer />
     </div>
   );
 };
