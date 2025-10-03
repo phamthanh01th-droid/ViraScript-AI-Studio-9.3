@@ -22,7 +22,7 @@ Mục tiêu chính là cho phép người dùng toàn quyền kiểm soát sáng
 
 3.  **Cỗ Máy Nhất Quán (Consistency Engine):**
     *   **Nhân Vật & Bối Cảnh (Consistent Character):** Giai đoạn **"Review & Refine"** là trái tim của sự nhất quán. Người dùng có thể chỉnh sửa hoặc tạo lại mô tả chi tiết về ngoại hình, trang phục của nhân vật và bối cảnh. Những mô tả này sẽ được "khóa lại" và tuân thủ nghiêm ngặt trong mọi prompt tạo cảnh, đảm bảo nhân vật giữ nguyên vẹn trên toàn bộ video.
-    *   **Giọng Nói Nhất Quán & Chuẩn Hóa (Consistent & Standardized Voice):** Tại bước "Review & Refine", người dùng có thể "tuyển vai" giọng nói cho người dẫn chuyện và từng nhân vật từ danh sách có sẵn (nay đã có giọng Tiếng Việt). Quan trọng hơn, file JSON đầu ra giờ đây chứa mã giọng nói kỹ thuật tiêu chuẩn của Google Cloud (ví dụ: `vi-VN-Wavenet-A`), giúp nó tương thích và sẵn sàng sử dụng ngay lập tức với các công cụ khác.
+    *   **Giọng Nói Nhất Quán & Chuẩn Hóa (Consistent & Standardized Voice):** Tại bước "Review & Refine", người dùng có thể "tuyển vai" giọng nói cho người dẫn chuyện và từng nhân vật. Quan trọng hơn, file JSON đầu ra giờ đây tuân thủ nghiêm ngặt tài liệu mới nhất của Gemini API: sử dụng trường `voice_name` với các tên giọng nói chính thức (ví dụ: 'Zephyr', 'Puck') từ model `gemini-2.5-flash-preview-tts` và trường `speaker` để xác định người nói. Điều này đảm bảo tính tương thích tuyệt đối và giúp các công cụ như VEO 3 nhận diện chính xác yêu cầu chuyển đổi giọng nói.
     *   **Phong Cách Video (Upgraded!):** **Phong cách Video** đã chọn được áp dụng nhất quán một cách **cực kỳ nghiêm ngặt** cho mọi cảnh, từ bố cục, ánh sáng đến màu sắc, tạo ra một bộ phim có thẩm mỹ đồng nhất.
 
 4.  **Cấu trúc Kịch bản Chuyên nghiệp:**
@@ -70,7 +70,7 @@ The primary goal is to give users full creative control, from refining character
 
 3.  **The Consistency Engine:**
     *   **Consistent Character & Setting:** The **"Review & Refine"** stage is the heart of consistency. Users can edit or regenerate detailed descriptions of character appearance, wardrobe, and setting. These descriptions are then "locked in" and strictly enforced in every scene prompt.
-    *   **Consistent & Standardized Voice:** In the "Review & Refine" stage, users can "cast" voices for the Narrator and characters from a predefined list (now including Vietnamese voices). More importantly, the output JSON now contains standardized Google Cloud technical voice codes (e.g., `vi-VN-Wavenet-A`), making it compatible and ready for immediate use in external tools.
+    *   **Consistent & Standardized Voice:** In the "Review & Refine" stage, users can "cast" voices for the Narrator and characters. More importantly, the output JSON now strictly adheres to the latest Gemini API documentation: it uses the `voice_name` field with official voice names (e.g., 'Zephyr', 'Puck') from the `gemini-2.5-flash-preview-tts` model and the `speaker` field to identify the speaker. This ensures maximum compatibility and allows tools like VEO 3 to correctly interpret the voice generation request.
     *   **Consistent Video Style (Upgraded!):** The selected **Video Style** is now **critically enforced** across every scene's cinematography—from composition and lighting to color palette—creating a film with a unified aesthetic.
 
 4.  **Professional Script Structure:**
