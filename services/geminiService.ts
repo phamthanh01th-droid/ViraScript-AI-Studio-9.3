@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from '@google/genai';
 import { UserInput, CharacterProfile, StoryboardData, AspectRatio, Scene } from '../types';
 
@@ -32,18 +33,68 @@ const safetyInstruction = `
 
 const voiceModelMap: Record<string, Record<string, string>> = {
   English: {
-    'Zephyr (Female US)': 'en-US-Wavenet-F',
-    'Kore (Female US)': 'en-US-Wavenet-E',
-    'Puck (Male US)': 'en-US-Wavenet-B',
-    'Charon (Male US)': 'en-US-Wavenet-D',
-    'Fenrir (Male US)': 'en-US-Wavenet-A',
+    'Zephyr (Bright)': 'Zephyr',
+    'Puck (Vibrant)': 'Puck',
+    'Charon (Informative)': 'Charon',
+    'Kore (Firm)': 'Kore',
+    'Fenrir (Excitable)': 'Fenrir',
+    'Leda (Youthful)': 'Leda',
+    'Orus (Firm)': 'Orus',
+    'Aoede (Breezy)': 'Aoede',
+    'Callirrhoe (Pleasant)': 'Callirrhoe',
+    'Autonoe (Bright)': 'Autonoe',
+    'Enceladus (Breathy)': 'Enceladus',
+    'Iapetus (Clear)': 'Iapetus',
+    'Umbriel (Easygoing)': 'Umbriel',
+    'Algieba (Smooth)': 'Algieba',
+    'Despina (Smooth)': 'Despina',
+    'Erinome (Clear)': 'Erinome',
+    'Algenib (Hoarse)': 'Algenib',
+    'Rasalgethi (Informative)': 'Rasalgethi',
+    'Laomedeia (Vibrant)': 'Laomedeia',
+    'Achernar (Soft)': 'Achernar',
+    'Alnilam (Firm)': 'Alnilam',
+    'Schedar (Even)': 'Schedar',
+    'Gacrux (Mature)': 'Gacrux',
+    'Pulcherrima (Optimistic)': 'Pulcherrima',
+    'Achird (Friendly)': 'Achird',
+    'Zubenelgenubi (Normal)': 'Zubenelgenubi',
+    'Vindemiatrix (Gentle)': 'Vindemiatrix',
+    'Sadachbia (Lively)': 'Sadachbia',
+    'Sadaltager (Knowledgeable)': 'Sadaltager',
+    'Sulafat (Warm)': 'Sulafat',
   },
   Vietnamese: {
-    'Linh (Nữ Miền Bắc)': 'vi-VN-Wavenet-A',
-    'Mai (Nữ Miền Nam)': 'vi-VN-Wavenet-C',
-    'Quang (Nam Miền Bắc)': 'vi-VN-Wavenet-B',
-    'Bảo (Nam Miền Nam)': 'vi-VN-Wavenet-D',
-    'Giọng Chuẩn Nam': 'vi-VN-Standard-D',
+    'Zephyr (Tươi sáng)': 'Zephyr',
+    'Puck (Rộn ràng)': 'Puck',
+    'Charon (Cung cấp nhiều thông tin)': 'Charon',
+    'Kore (Firm)': 'Kore',
+    'Fenrir (Dễ kích động)': 'Fenrir',
+    'Leda (Trẻ trung)': 'Leda',
+    'Orus (Firm)': 'Orus',
+    'Aoede (Breezy)': 'Aoede',
+    'Callirrhoe (Dễ chịu)': 'Callirrhoe',
+    'Autonoe (Tươi sáng)': 'Autonoe',
+    'Enceladus (Breathy)': 'Enceladus',
+    'Iapetus (Rõ ràng)': 'Iapetus',
+    'Umbriel (Dễ tính)': 'Umbriel',
+    'Algieba (Làm mịn)': 'Algieba',
+    'Despina (Smooth)': 'Despina',
+    'Erinome (Clear)': 'Erinome',
+    'Algenib (Khàn)': 'Algenib',
+    'Rasalgethi (Cung cấp nhiều thông tin)': 'Rasalgethi',
+    'Laomedeia (Rộn ràng)': 'Laomedeia',
+    'Achernar (Mềm)': 'Achernar',
+    'Alnilam (Firm)': 'Alnilam',
+    'Schedar (Even)': 'Schedar',
+    'Gacrux (Người trưởng thành)': 'Gacrux',
+    'Pulcherrima (Lạc quan)': 'Pulcherrima',
+    'Achird (Thân thiện)': 'Achird',
+    'Zubenelgenubi (Bình thường)': 'Zubenelgenubi',
+    'Vindemiatrix (Êm dịu)': 'Vindemiatrix',
+    'Sadachbia (Lively)': 'Sadachbia',
+    'Sadaltager (Hiểu biết)': 'Sadaltager',
+    'Sulafat (Ấm)': 'Sulafat',
   }
 };
 
@@ -58,8 +109,8 @@ const promptLocalizations = {
             Create a character profile for a short video based on the following user input.
             The profile must include 2-3 main characters and one primary setting.
             For each character, provide a name and a detailed description that implies their gender (male or female). Also provide a visually-rich description focusing on specific, non-negotiable "visual anchors": facial features, hair style/color, signature wardrobe, and body type. This description is CRITICAL for generating consistent character images later.
-            CRITICAL VOICE CASTING RULE: You MUST assign a distinct voice for each character from the following available list. The voice MUST match the character's implied gender. For example, a male character must be assigned a voice with "(Male)" in its name. Available Voices: ${availableVoices}.
-            Finally, you MUST assign a MALE voice for the Narrator. The narrator's voice should be chosen from one of the "(Male)" options in the list.
+            CRITICAL VOICE CASTING RULE: You MUST assign a distinct voice for each character from the following available list. Choose a voice whose characteristic (e.g., 'Bright', 'Firm', 'Youthful') best matches the character's personality. Available Voices: ${availableVoices}.
+            Finally, you MUST assign a suitable voice for the Narrator, such as one described as 'Informative' or 'Knowledgeable' from the list.
 
             User Input:
             - Topic: ${userInput.topic}
@@ -141,7 +192,7 @@ const promptLocalizations = {
                 - **CRITICAL CONSISTENCY RULE:** For the 'master_description' field, find the character speaking or acting in the scene and insert their FULL, UNCHANGED description from this Profile. If no specific character is active (e.g., narrator-only scene), use the Setting's description.
 
             3.  **Locked Voices (Source of Audio Truth):**
-                - **CRITICAL VOICE CONSISTENCY:** For the 'voice_model' field, you MUST find the character speaking ('dialogue_character') and use the exact voice model name assigned to them in the Character Profile above. If the speaker is "Narrator", use the assigned 'narratorVoice'.
+                - **CRITICAL VOICE CONSISTENCY:** For the 'voice_name' field, you MUST find the character speaking ('speaker') and use the exact voice name assigned to them in the Character Profile above. If the speaker is "Narrator", use the assigned 'narratorVoice'.
 
             4.  **Core Cinematic & Style Rules:**
                 - **ABSOLUTELY CRITICAL STYLE RULE:** The 'style_notes' field is the most important instruction for visual generation. It MUST be a detailed string that explicitly defines the visual characteristics of both the video and image style. This exact string will be used to generate the visuals, so it must be comprehensive and accurate. Example: "Video Style: Cinematic, Image Style: Cinematic - characterized by high-contrast lighting, deep shadows, smooth camera movements, and a shallow depth of field." This note must be applied UNIFORMLY to EVERY scene without fail.
@@ -195,8 +246,8 @@ const promptLocalizations = {
             Tạo hồ sơ nhân vật cho một video ngắn dựa trên thông tin người dùng sau đây.
             Hồ sơ phải bao gồm 2-3 nhân vật chính và một bối cảnh chính.
             Đối với mỗi nhân vật, hãy cung cấp tên và một mô tả chi tiết ngụ ý giới tính của họ (nam hoặc nữ). Đồng thời cung cấp mô tả giàu hình ảnh, tập trung vào các "đặc điểm nhận dạng" cụ thể, không thể thay đổi: nét mặt, kiểu/màu tóc, trang phục đặc trưng và dáng người. Mô tả này CỰC KỲ QUAN TRỌNG để tạo ra hình ảnh nhân vật nhất quán sau này.
-            QUY TẮC CHỌN GIỌNG NÓI TỐI QUAN TRỌNG: Bạn PHẢI gán một giọng nói riêng biệt cho mỗi nhân vật từ danh sách có sẵn sau. Giọng nói PHẢI khớp với giới tính ngụ ý của nhân vật. Ví dụ, một nhân vật nam phải được gán một giọng nói có chữ "(Nam)" trong tên. Danh sách giọng nói có sẵn: ${availableVoices}.
-            Cuối cùng, bạn PHẢI gán một giọng NAM cho Người Dẫn Chuyện. Giọng của người dẫn chuyện nên được chọn từ một trong các tùy chọn có "(Nam)" trong danh sách.
+            QUY TẮC CHỌN GIỌNG NÓI TỐI QUAN TRỌNG: Bạn PHẢI gán một giọng nói riêng biệt cho mỗi nhân vật từ danh sách có sẵn sau. Hãy chọn một giọng nói có đặc tính (ví dụ: 'Tươi sáng', 'Firm', 'Trẻ trung') phù hợp nhất với tính cách của nhân vật. Danh sách giọng nói có sẵn: ${availableVoices}.
+            Cuối cùng, bạn PHẢI gán một giọng nói phù hợp cho Người Dẫn Chuyện, chẳng hạn như một giọng được mô tả là 'Cung cấp nhiều thông tin' hoặc 'Hiểu biết' từ danh sách.
 
             Thông tin người dùng:
             - Chủ đề: ${userInput.topic}
@@ -278,7 +329,7 @@ const promptLocalizations = {
                 - **QUY TẮC NHẤT QUÁN TỐI QUAN TRỌNG:** Đối với trường 'master_description', hãy tìm nhân vật đang nói hoặc hành động trong cảnh và chèn mô tả ĐẦY ĐỦ, KHÔNG THAY ĐỔI của họ từ Hồ sơ này. Nếu không có nhân vật cụ thể nào hoạt động, hãy sử dụng mô tả của Bối cảnh.
 
             3.  **Giọng nói Đã khóa (Nguồn Chân lý Âm thanh):**
-                - **NHẤT QUÁN GIỌNG NÓI TỐI QUAN TRỌNG:** Đối với trường 'voice_model', bạn PHẢI tìm nhân vật đang nói ('dialogue_character') và sử dụng đúng tên mô hình giọng nói đã được gán cho họ trong Hồ sơ Nhân vật ở trên. Nếu người nói là "Narrator" (Người dẫn chuyện), hãy sử dụng 'narratorVoice' đã được gán.
+                - **NHẤT QUÁN GIỌNG NÓI TỐI QUAN TRỌNG:** Đối với trường 'voice_name', bạn PHẢI tìm nhân vật đang nói ('speaker') và sử dụng đúng tên mô hình giọng nói đã được gán cho họ trong Hồ sơ Nhân vật ở trên. Nếu người nói là "Narrator" (Người dẫn chuyện), hãy sử dụng 'narratorVoice' đã được gán.
 
             4.  **Quy tắc Điện ảnh & Phong cách Cốt lõi:**
                 - **QUY TẮC PHONG CÁCH TUYỆT ĐỐI QUAN TRỌNG:** Trường 'style_notes' là hướng dẫn quan trọng nhất để tạo hình ảnh. Nó PHẢI là một chuỗi chi tiết xác định rõ ràng các đặc điểm hình ảnh của cả phong cách video và hình ảnh. Chuỗi này sẽ được sử dụng để tạo ra hình ảnh, vì vậy nó phải toàn diện và chính xác. Ví dụ: "Phong cách Video: Điện ảnh, Phong cách Hình ảnh: Điện ảnh - đặc trưng bởi ánh sáng tương phản cao, bóng sâu, chuyển động máy quay mượt mà và độ sâu trường ảnh nông." Ghi chú này phải được áp dụng ĐỒNG NHẤT cho MỌI cảnh.
@@ -287,7 +338,7 @@ const promptLocalizations = {
                 - **QUY TẮC ĐỘ DÀI LỜI THOẠI:** 'dialogue_line' của một cảnh KHÔNG ĐƯỢC vượt quá 13 từ. Nếu một dòng thoại hoặc lời dẫn từ Kịch bản Gốc dài hơn 13 từ, bạn PHẢI chia nó thành nhiều cảnh liên tiếp.
 
             5.  **QUY TẮC ĐIỆN ẢNH CHO LỜI THOẠI DÀI:**
-                - Khi một dòng thoại dài hơn 13 từ và bạn phải chia nó thành nhiều cảnh, bạn **KHÔNG ĐƯỢC** lặp lại 'scene_description' và 'camera_shot' một cách y hệt.
+                - Khi một dòng thoại dài hơn 13 từ và bạn phải chia nó thành nhiều cảnh, bạn **KHÔNG ĐƯỢỢC** lặp lại 'scene_description' và 'camera_shot' một cách y hệt.
                 - Thay vào đó, hãy coi đây là một chuỗi cảnh quay và áp dụng các kỹ thuật điện ảnh:
                     - **Thay đổi góc máy:** Bắt đầu bằng cảnh trung, sau đó chuyển sang cận cảnh ở dòng tiếp theo để nhấn mạnh cảm xúc.
                     - **Sử dụng cảnh quay phản ứng:** Cắt cảnh sang phản ứng của một nhân vật khác.
@@ -540,13 +591,13 @@ export const breakdownScriptIntoScenes = async (userInput: UserInput, characterP
             master_description: { type: Type.STRING, description: "The full, original, unchanged description of the character (or setting) from the profile. This is the source of truth for visual consistency." },
             scene_description: { type: Type.STRING, description: "A visual description of the character's specific actions, expressions, and the setting in this scene, translated from the master script." },
             dialogue_line: { type: Type.STRING, description: "The character's or narrator's line of dialogue, copied exactly from the master script. Can be empty." },
-            dialogue_character: { type: Type.STRING, description: "The name of the character speaking or 'Narrator'. Copied exactly from the master script. Can be empty." },
-            voice_model: { type: Type.STRING, description: "The specific pre-defined voice model name for the speaking character or narrator (e.g., 'Zephyr', 'Puck')." },
+            speaker: { type: Type.STRING, description: "The name of the character speaking or 'Narrator'. Copied exactly from the master script. Can be empty." },
+            voice_name: { type: Type.STRING, description: "The specific pre-defined friendly voice name for the speaking character or narrator (e.g., 'Zephyr', 'Kore')." },
             camera_shot: { type: Type.STRING, description: "A professional suggestion for the camera shot (e.g., 'Close-up', 'Wide shot')." },
             audio_description: { type: Type.STRING, description: "A narrative description of the scene's soundscape." },
             style_notes: { type: Type.STRING, description: "CRITICAL: A detailed string defining the visual style of the video and image." }
         },
-        required: ["scene_context", "character_name", "master_description", "scene_description", "audio_description", "style_notes", "camera_shot", "voice_model"]
+        required: ["scene_context", "character_name", "master_description", "scene_description", "audio_description", "style_notes", "camera_shot", "voice_name"]
      };
 
     const scenesSchema = {
@@ -632,23 +683,23 @@ export const breakdownScriptIntoScenes = async (userInput: UserInput, characterP
 
     const processedScenes = allScenes.map(scene => {
         const prompt = scene.scene_prompt_json as any;
-        const speaker = prompt?.dialogue_character;
+        const speakerName = prompt?.speaker;
 
-        if (speaker && prompt.voice_model) {
-            let friendlyVoice = prompt.voice_model; // The AI should have picked the right one
+        if (speakerName && prompt.voice_name) {
+            let friendlyVoice = prompt.voice_name; 
             
             // In case the AI hallucinates a name, let's find the correct one from the profile
-            if (speaker.toUpperCase() === narratorName) {
+            if (speakerName.toUpperCase() === narratorName) {
                 friendlyVoice = characterProfile.narratorVoice;
             } else {
-                const char = characterProfile.characters.find(c => c.name === speaker);
+                const char = characterProfile.characters.find(c => c.name === speakerName);
                 if (char) {
                     friendlyVoice = char.voice;
                 }
             }
             
             const technicalVoice = voiceMapForLanguage[friendlyVoice] || friendlyVoice;
-            prompt.voice_model = technicalVoice;
+            prompt.voice_name = technicalVoice;
         }
 
         return { ...scene, scene_prompt_json: prompt };

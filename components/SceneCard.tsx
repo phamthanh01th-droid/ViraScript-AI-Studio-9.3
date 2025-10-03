@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 // FIX: Import AspectRatio and CharacterProfile to be used in SceneCardProps.
 import { Scene, AspectRatio, CharacterProfile } from '../types';
@@ -54,8 +55,8 @@ const SceneCard: React.FC<SceneCardProps> = ({ scene, imageStyle, aspectRatio, c
 
 
   const dialogue = promptData?.dialogue_line || '';
-  const character = promptData?.dialogue_character || '';
-  const voiceModel = promptData?.voice_model || 'Not specified';
+  const speaker = promptData?.speaker || '';
+  const voiceName = promptData?.voice_name || 'Not specified';
 
   return (
     <>
@@ -78,10 +79,10 @@ const SceneCard: React.FC<SceneCardProps> = ({ scene, imageStyle, aspectRatio, c
             {dialogue && (
                 <div>
                     <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-slate-400 text-xs uppercase tracking-wider">{character}</h4>
+                        <h4 className="font-semibold text-slate-400 text-xs uppercase tracking-wider">{speaker}</h4>
                         <div className="flex items-center gap-1.5 text-amber-400">
                             <MicrophoneIcon className="w-3 h-3" />
-                            <p className="text-xs font-semibold break-all">{voiceModel}</p>
+                            <p className="text-xs font-semibold break-all">{voiceName}</p>
                         </div>
                     </div>
                     <p className="text-slate-300 italic mt-1">"{dialogue}"</p>

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { StoryboardData, Scene, UserInput, CharacterProfile } from '../types';
 import SceneCard from './SceneCard';
@@ -90,7 +91,7 @@ const FullScriptOverview: React.FC<FullScriptOverviewProps> = ({ scenes, masterS
                                     {scenes.map(scene => {
                                         const prompt = scene.scene_prompt_json as any;
                                         const dialogue = prompt?.dialogue_line;
-                                        const character = prompt?.dialogue_character;
+                                        const speaker = prompt?.speaker;
                                         const visual = prompt?.scene_description;
                                         return (
                                             <div key={scene.scene_number} className="border-b border-slate-700/50 pb-3 last:border-b-0">
@@ -104,7 +105,7 @@ const FullScriptOverview: React.FC<FullScriptOverviewProps> = ({ scenes, masterS
                                                 {dialogue && (
                                                     <p className="text-sm text-slate-200 italic mt-1">
                                                         <span className="font-semibold text-slate-400 not-italic">
-                                                            {character || 'NARRATOR'}:
+                                                            {speaker || 'NARRATOR'}:
                                                         </span>
                                                         &nbsp;&ldquo;{dialogue}&rdquo;
                                                     </p>
