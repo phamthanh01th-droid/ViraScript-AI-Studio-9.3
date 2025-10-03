@@ -1,23 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CharacterProfile } from '../types';
 import { MagicIcon } from './icons/MagicIcon';
 import { RefreshIcon } from './icons/RefreshIcon';
+import { getAvailableVoices } from '../services/geminiService';
 
 interface CharacterReviewProps {
   initialProfile: CharacterProfile;
   onSubmit: (data: CharacterProfile) => void;
   onBack: () => void;
   onRegenerate: () => void;
+  language: string;
 }
 
-const availableVoices = ['Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir'];
-
-const CharacterReview: React.FC<CharacterReviewProps> = ({ initialProfile, onSubmit, onBack, onRegenerate }) => {
+const CharacterReview: React.FC<CharacterReviewProps> = ({ initialProfile, onSubmit, onBack, onRegenerate, language }) => {
   const [editableProfile, setEditableProfile] = useState<CharacterProfile>(JSON.parse(JSON.stringify(initialProfile)));
+  
+  const availableVoices = useMemo(() => getAvailableVoices(language), [language]);
 
   React.useEffect(() => {
-    setEditableProfile(JSON.parse(JSON.stringify(initialProfile)));
-  }, [initialProfile]);
+    // When the initial profile changes (e.g., after regeneration), update the state.
+    // Also, ensure the voices in the profile are valid for the current language.
+    const newProfile = JSON.parse(JSON.stringify(initialProfile));
+    const validVoices = getAvailableVoices(language);
+    
+    newProfile.characters.forEach((char: any) => {
+        if (!validVoices.includes(char.voice)) {
+            char.voice = validVoices[0] || '';
+        }
+    });
+    if (!validVoices.includes(newProfile.narratorVoice)) {
+        newProfile.narratorVoice = validVoices[0] || '';
+    }
+
+    setEditableProfile(newProfile);
+  }, [initialProfile, language]);
 
 
   const handleCharacterChange = (index: number, field: 'name' | 'description' | 'voice', value: string) => {

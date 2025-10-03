@@ -148,13 +148,14 @@ const App: React.FC = () => {
       case AppStage.INPUT:
         return <InputForm onSubmit={handleInputFormSubmit} apiKeys={apiKeys} />;
       case AppStage.CHARACTER_REVIEW:
-        if (characterProfile) {
+        if (characterProfile && userInput) {
           return (
             <CharacterReview 
               initialProfile={characterProfile} 
               onSubmit={handleCharacterReviewSubmit}
               onBack={handleBackToInput}
               onRegenerate={handleRegenerateCharacters} 
+              language={userInput.language}
             />
           );
         }
