@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 // FIX: Import AspectRatio and CharacterProfile to be used in SceneCardProps.
 import { Scene, AspectRatio, CharacterProfile } from '../types';
@@ -27,11 +26,14 @@ const SceneCard: React.FC<SceneCardProps> = ({ scene, imageStyle, aspectRatio, c
 
   const promptData = scene.scene_prompt_json as any;
 
+  // Display the main scene description directly. For Vietnamese projects, this will be in English as per the new logic.
+  const sceneDescriptionForDisplay = promptData?.scene_description || '';
+
   // Construct the full, ready-to-use image prompt
   const masterDescription = promptData?.master_description || '';
-  const sceneDescription = promptData?.scene_description || '';
+  const sceneDescriptionForPrompt = promptData?.scene_description || '';
   const cameraShot = promptData?.camera_shot || '';
-  const finalImagePrompt = `${masterDescription}. In this scene: ${sceneDescription}. Camera Shot: ${cameraShot}. Style: ${imageStyle}.`;
+  const finalImagePrompt = `${masterDescription}. In this scene: ${sceneDescriptionForPrompt}. Camera Shot: ${cameraShot}. Style: ${imageStyle}.`;
 
   const handleCopy = (textToCopy: string, setter: React.Dispatch<React.SetStateAction<string>>) => {
     navigator.clipboard.writeText(textToCopy).then(() => {
@@ -68,7 +70,7 @@ const SceneCard: React.FC<SceneCardProps> = ({ scene, imageStyle, aspectRatio, c
         <div className="flex-grow space-y-3 text-sm">
             <div>
                 <h4 className="font-semibold text-slate-400 text-xs uppercase tracking-wider">Visuals</h4>
-                <p className="text-slate-300">{sceneDescription}</p>
+                <p className="text-slate-300">{sceneDescriptionForDisplay}</p>
             </div>
             
              <div className="flex items-center gap-2 text-teal-400">

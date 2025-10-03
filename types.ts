@@ -1,3 +1,4 @@
+
 export enum AppStage {
   INPUT,
   CHARACTER_REVIEW,
@@ -5,10 +6,13 @@ export enum AppStage {
   ERROR,
 }
 
+export type ScriptSource = 'generate' | 'provide';
+
 export type AspectRatio = '16:9' | '9:16';
 
 export interface UserInput {
-  topic: string;
+  scriptSource: ScriptSource;
+  scriptContent: string;
   channelType: string;
   videoStyle: string;
   imageStyle: string;

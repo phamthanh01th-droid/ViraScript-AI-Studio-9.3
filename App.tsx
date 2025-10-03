@@ -1,6 +1,7 @@
+
 import React, { useState, useCallback } from 'react';
 import { AppStage, UserInput, CharacterProfile, StoryboardData, Scene } from './types';
-import { generateCharacterProfile, generateMasterScript, breakdownScriptIntoScenes, initializeKeys, apiKeyStatuses, keyIndex } from './services/geminiService';
+import { generateCharacterProfile, generateMasterScript, breakdownScriptIntoScenes, initializeKeys, apiKeyStatuses, keyIndex, generateCharacterProfileFromScript } from './services/geminiService';
 
 import Header from './components/Header';
 import ApiKeyInput from './components/ApiKeyInput';
@@ -40,11 +41,16 @@ const App: React.FC = () => {
   const handleInputFormSubmit = useCallback(async (data: UserInput) => {
     setUserInput(data);
     setIsLoading(true);
-    setLoadingMessage('Generating Characters & Setting...');
+    setLoadingMessage('Analyzing Script & Generating Characters...');
     setError(null);
 
     try {
-      const profile = await generateCharacterProfile(data, apiKeys);
+      let profile: CharacterProfile;
+      if (data.scriptSource === 'provide') {
+        profile = await generateCharacterProfileFromScript(data, apiKeys);
+      } else {
+        profile = await generateCharacterProfile(data, apiKeys);
+      }
       setCharacterProfile(profile);
       setAppStage(AppStage.CHARACTER_REVIEW);
     } catch (err) {
@@ -61,7 +67,12 @@ const App: React.FC = () => {
     setLoadingMessage('Regenerating Characters & Setting...');
     setError(null);
     try {
-      const profile = await generateCharacterProfile(userInput, apiKeys);
+      let profile: CharacterProfile;
+      if (userInput.scriptSource === 'provide') {
+        profile = await generateCharacterProfileFromScript(userInput, apiKeys);
+      } else {
+        profile = await generateCharacterProfile(userInput, apiKeys);
+      }
       setCharacterProfile(profile);
     } catch (err) {
       handleError(err instanceof Error ? err.message : 'Failed to regenerate character profile.');
@@ -78,15 +89,18 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      // Step 1: Generate the master script that adheres to the duration
-      setLoadingMessage('Writing the master script...');
-      const masterScript = await generateMasterScript(userInput, data, apiKeys);
+      let masterScript: string;
 
-      // Step 2: Break down the master script into individual scenes
+      if (userInput.scriptSource === 'provide') {
+        masterScript = userInput.scriptContent;
+      } else {
+        setLoadingMessage('Writing the master script...');
+        masterScript = await generateMasterScript(userInput, data, apiKeys);
+      }
+
       setLoadingMessage('Breaking script into scenes...');
       const storyboard = await breakdownScriptIntoScenes(userInput, data, masterScript, apiKeys);
       
-      // Post-process to inject the correct scene number and total scenes into the JSON prompt
       const totalScenes = storyboard.scenes.length;
       const updatedScenes = storyboard.scenes.map((scene: Scene, index: number) => {
         const prompt = scene.scene_prompt_json as any;
@@ -98,7 +112,7 @@ const App: React.FC = () => {
       });
       
       storyboard.scenes = updatedScenes;
-      storyboard.master_script = masterScript; // Attach master script to the final data
+      storyboard.master_script = masterScript;
       
       setStoryboardData(storyboard);
       setAppStage(AppStage.STORYBOARD);

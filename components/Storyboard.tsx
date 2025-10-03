@@ -50,6 +50,10 @@ const FullScriptOverview: React.FC<FullScriptOverviewProps> = ({ scenes, masterS
         </div>
     );
 
+    const topicDisplay = userInput.scriptSource === 'generate'
+        ? userInput.scriptContent
+        : `User-provided script starting with: "${userInput.scriptContent.substring(0, 100)}..."`;
+
     return (
         <div className="mt-12 bg-slate-800/50 rounded-2xl border border-slate-700">
             <button
@@ -71,13 +75,13 @@ const FullScriptOverview: React.FC<FullScriptOverviewProps> = ({ scenes, masterS
                             <h4 className="text-lg font-bold text-white mb-3">Project Details</h4>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                                 <div className="col-span-2 md:col-span-3 lg:col-span-5">
-                                    <DetailItem label="Topic" value={userInput.topic} />
+                                    <DetailItem label="Topic / Idea" value={topicDisplay} />
                                 </div>
                                 <DetailItem label="Video Style" value={userInput.videoStyle} />
                                 <DetailItem label="Image Style" value={userInput.imageStyle} />
-                                <DetailItem label="Writing Style" value={userInput.writingStyle} />
+                                {userInput.scriptSource === 'generate' && <DetailItem label="Writing Style" value={userInput.writingStyle} />}
                                 <DetailItem label="Language" value={userInput.language} />
-                                <DetailItem label="Duration" value={formatDurationDisplay(userInput.durationInSeconds)} />
+                                {userInput.scriptSource === 'generate' && <DetailItem label="Duration" value={formatDurationDisplay(userInput.durationInSeconds)} />}
                             </div>
                         </div>
 
@@ -174,7 +178,7 @@ const Storyboard: React.FC<StoryboardProps> = ({ storyboardData, userInput, char
             .slice(0, 60) || 'vira_script_scenes';
     };
 
-    const filename = `${createSafeFilename(userInput.topic)}_scenes.txt`;
+    const filename = `${createSafeFilename(userInput.scriptContent)}_scenes.txt`;
 
     const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);

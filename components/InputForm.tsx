@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { UserInput, AspectRatio } from '../types';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { UserInput, AspectRatio, ScriptSource } from '../types';
 import { MagicIcon } from './icons/MagicIcon';
-import { getStyleSuggestions } from '../services/geminiService';
+import { getStyleSuggestions, getStyleSuggestionsFromScript } from '../services/geminiService';
 
 interface InputFormProps {
   onSubmit: (data: UserInput) => void;
@@ -89,17 +89,28 @@ const styleOptions: { en: string; vi: string }[] = [
 ];
 
 const languageOptions: Record<string, string> = {
-  'English': 'English',
+  'English': 'English (US)',
   'Vietnamese': 'Tiếng Việt',
-  'Chinese': '中文',
-  'Japanese': '日本語',
-  'French': 'Français'
+};
+
+const useDebounce = (value: string, delay: number) => {
+    const [debouncedValue, setDebouncedValue] = useState(value);
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+    return debouncedValue;
 };
 
 
 const InputForm: React.FC<InputFormProps> = ({ onSubmit, apiKeys }) => {
   const [formData, setFormData] = useState<UserInput>({
-    topic: 'A cat detective solving the mystery of the missing tuna in a noir city.',
+    scriptSource: 'generate',
+    scriptContent: 'A cat detective solving the mystery of the missing tuna in a noir city.',
     channelType: 'Commentary/Narrative',
     videoStyle: '',
     imageStyle: '',
@@ -109,25 +120,18 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, apiKeys }) => {
     aspectRatio: '16:9' as AspectRatio,
   });
   const [isSuggesting, setIsSuggesting] = useState(false);
+  const debouncedScriptContent = useDebounce(formData.scriptContent, 1000);
 
+  // Suggest Image/Writing style based on Video Style (for 'generate' mode)
   useEffect(() => {
-    if (formData.videoStyle && apiKeys && apiKeys.length > 0) {
+    if (formData.scriptSource === 'generate' && formData.videoStyle && apiKeys?.length > 0) {
       const suggestStyles = async () => {
         setIsSuggesting(true);
         try {
           const styleOptionsEn = styleOptions.map(s => s.en);
-          const suggestions = await getStyleSuggestions(
-            formData.videoStyle,
-            styleOptionsEn,
-            styleOptionsEn,
-            apiKeys
-          );
+          const suggestions = await getStyleSuggestions(formData.videoStyle, styleOptionsEn, styleOptionsEn, apiKeys);
           if (suggestions.imageStyle && suggestions.writingStyle) {
-             setFormData(prev => ({
-              ...prev,
-              imageStyle: suggestions.imageStyle,
-              writingStyle: suggestions.writingStyle
-            }));
+             setFormData(prev => ({ ...prev, imageStyle: suggestions.imageStyle, writingStyle: suggestions.writingStyle }));
           }
         } catch (error) {
           console.error("Failed to get style suggestions:", error);
@@ -136,19 +140,51 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, apiKeys }) => {
         }
       };
       suggestStyles();
-    } else {
+    } else if (formData.scriptSource === 'generate') {
         setFormData(prev => ({ ...prev, imageStyle: '', writingStyle: '' }));
     }
-  }, [formData.videoStyle, apiKeys]);
+  }, [formData.videoStyle, formData.scriptSource, apiKeys]);
 
+  // Suggest Video/Image style based on provided script (for 'provide' mode)
+  useEffect(() => {
+    if (formData.scriptSource === 'provide' && debouncedScriptContent.length > 50 && apiKeys?.length > 0) {
+      const suggestStylesFromScript = async () => {
+        setIsSuggesting(true);
+        try {
+          const styleOptionsEn = styleOptions.map(s => s.en);
+          const suggestions = await getStyleSuggestionsFromScript(debouncedScriptContent, styleOptionsEn, apiKeys);
+           if (suggestions.videoStyle && suggestions.imageStyle) {
+             setFormData(prev => ({ ...prev, videoStyle: suggestions.videoStyle, imageStyle: suggestions.imageStyle }));
+          }
+        } catch (error) {
+            console.error("Failed to get style suggestions from script:", error);
+        } finally {
+            setIsSuggesting(false);
+        }
+      };
+      suggestStylesFromScript();
+    }
+  }, [debouncedScriptContent, formData.scriptSource, apiKeys]);
+
+
+  const handleSourceChange = (source: ScriptSource) => {
+    setFormData(prev => ({
+        ...prev,
+        scriptSource: source,
+        scriptContent: source === 'generate' 
+            ? 'A cat detective solving the mystery of the missing tuna in a noir city.' 
+            : '',
+        videoStyle: '',
+        imageStyle: '',
+        writingStyle: ''
+    }));
+  };
 
   const formatDuration = (seconds: number): string => {
     const totalSeconds = seconds;
     const minutes = Math.floor(totalSeconds / 60);
     const remainingSeconds = totalSeconds % 60;
-    if (remainingSeconds === 0) {
-      return `${minutes} minute${minutes > 1 ? 's' : ''}`;
-    }
+    if (remainingSeconds === 0) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
     return `${minutes}m ${remainingSeconds}s`;
   };
 
@@ -156,11 +192,7 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, apiKeys }) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    if (name === 'durationInSeconds') {
-        setFormData(prev => ({ ...prev, durationInSeconds: parseInt(value, 10) }));
-    } else {
-        setFormData((prev) => ({ ...prev, [name]: value }));
-    }
+    setFormData(prev => ({ ...prev, [name]: name === 'durationInSeconds' ? parseInt(value, 10) : value }));
   };
     
   const handleRatioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,71 +204,62 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, apiKeys }) => {
     onSubmit(formData);
   };
 
-  const renderSelect = (
-    name: keyof Omit<UserInput, 'aspectRatio' | 'durationInSeconds' | 'topic'>, 
-    label: string, 
-    options: typeof styleOptions | Record<string,string>, 
-    isLoading: boolean = false
-) => {
-  const isSuggestionField = name === 'imageStyle' || name === 'writingStyle';
-  const isDisabled = isLoading || (isSuggestionField && !formData.videoStyle);
+  const renderSelect = (name: keyof UserInput, label: string, options: any, isLoading: boolean = false) => {
+    const isSuggestionField = name === 'imageStyle' || name === 'writingStyle';
+    const isDisabled = isLoading || (isSuggestionField && !formData.videoStyle && formData.scriptSource === 'generate');
 
-  return (
-    <div>
+    return (
+      <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-2">{label}</label>
         <select
-            id={name}
-            name={name}
-            value={formData[name]}
-            onChange={handleChange}
-            disabled={isDisabled}
-            required={name === 'videoStyle' || name === 'channelType'}
-            className="w-full bg-slate-900 border border-slate-700 rounded-md py-2 px-3 text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-wait"
-        >
-            <option value="" disabled>
-                {isLoading ? 'AI is suggesting...' : 'Select an option...'}
-            </option>
+            id={name} name={name} value={(formData as any)[name]} onChange={handleChange}
+            disabled={isDisabled} required={name !== 'imageStyle' && name !== 'writingStyle'}
+            className="w-full bg-slate-900 border border-slate-700 rounded-md py-2 px-3 text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-wait" >
+            <option value="" disabled>{isLoading ? 'AI is suggesting...' : 'Select an option...'}</option>
             {Array.isArray(options) && 'en' in options[0]
               ? (options as typeof styleOptions).map(opt => <option key={opt.en} value={opt.en}>{`${opt.en} / ${opt.vi}`}</option>)
-              : Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)
-            }
+              : Object.entries(options).map(([value, text]) => <option key={value} value={value as string}>{text as string}</option>)}
         </select>
-    </div>
-  );
-};
-
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-2xl mx-auto bg-slate-800/50 p-8 rounded-2xl shadow-2xl border border-slate-700">
-      <h2 className="text-3xl font-bold text-center mb-2 text-white">Bring Your Idea to Life</h2>
-      <p className="text-center text-slate-400 mb-8">Enter the details below, and our AI Director will get to work.</p>
+      <h2 className="text-3xl font-bold text-center mb-2 text-white">Bring Your Vision to Life</h2>
+      <p className="text-center text-slate-400 mb-8">Choose your starting point, and our AI Director will get to work.</p>
+      
+      <div className="flex justify-center gap-2 mb-6 bg-slate-900/50 p-1.5 rounded-lg max-w-md mx-auto">
+        <button onClick={() => handleSourceChange('generate')} className={`flex-1 text-center py-2 rounded-md font-semibold transition-colors ${formData.scriptSource === 'generate' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-700'}`}>
+            Generate Script from Idea
+        </button>
+        <button onClick={() => handleSourceChange('provide')} className={`flex-1 text-center py-2 rounded-md font-semibold transition-colors ${formData.scriptSource === 'provide' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-700'}`}>
+            Use Existing Script
+        </button>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="topic" className="block text-sm font-medium text-slate-300 mb-2">
-            Topic / Idea
+          <label htmlFor="scriptContent" className="block text-sm font-medium text-slate-300 mb-2">
+            {formData.scriptSource === 'generate' ? 'Topic / Idea' : 'Your Script'}
           </label>
           <div className="w-full bg-slate-900 border border-slate-700 rounded-md transition-all focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500">
             <textarea
-              id="topic"
-              name="topic"
-              value={formData.topic}
-              onChange={handleChange}
-              placeholder="e.g., A space explorer discovering a new planet"
-              rows={3}
-              className="w-full bg-transparent py-2 px-3 text-slate-200 focus:outline-none resize-y"
-              required
-            />
+              id="scriptContent" name="scriptContent" value={formData.scriptContent} onChange={handleChange}
+              placeholder={formData.scriptSource === 'generate' ? "e.g., A space explorer discovering a new planet" : "Paste your full script here..."}
+              rows={formData.scriptSource === 'generate' ? 3 : 8}
+              className="w-full bg-transparent py-2 px-3 text-slate-200 focus:outline-none resize-y" required />
           </div>
         </div>
         
         {renderSelect('channelType', 'Channel / Video Type', channelTypeOptions)}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {renderSelect('videoStyle', 'Video Style', styleOptions)}
-            {renderSelect('imageStyle', 'Image Style (AI Suggested)', styleOptions, isSuggesting)}
+            {renderSelect('videoStyle', `Video Style ${isSuggesting ? '(AI Suggesting...)' : ''}`, styleOptions)}
+            {renderSelect('imageStyle', `Image Style ${isSuggesting ? '(AI Suggesting...)' : ''}`, styleOptions)}
         </div>
         
-        {renderSelect('writingStyle', 'Writing Style / Tone (AI Suggested)', styleOptions, isSuggesting)}
+        {formData.scriptSource === 'generate' && renderSelect('writingStyle', 'Writing Style / Tone (AI Suggested)', styleOptions, isSuggesting)}
 
         <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">Aspect Ratio</label>
@@ -252,37 +275,20 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, apiKeys }) => {
             </div>
         </div>
 
-        <div>
+        {formData.scriptSource === 'generate' && <div>
             <label htmlFor="durationInSeconds" className="block text-sm font-medium text-slate-300 mb-2">
                 Desired Duration: <span className="font-bold text-indigo-400 tabular-nums">{displayDuration}</span>
             </label>
-            <input
-                type="range"
-                id="durationInSeconds"
-                name="durationInSeconds"
-                min="60"
-                max="1200"
-                step="15"
-                value={formData.durationInSeconds}
-                onChange={handleChange}
-                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-            />
-             <div className="flex justify-between text-xs text-slate-400 mt-1">
-                <span>1 min</span>
-                <span>20 mins</span>
-            </div>
-            <p className="text-xs text-slate-500 mt-2 text-center">
-                Note: The final script length is an AI estimate and may vary by +/- 1 minute to ensure a natural story pace.
-            </p>
-        </div>
+            <input type="range" id="durationInSeconds" name="durationInSeconds" min="60" max="1200" step="15" value={formData.durationInSeconds} onChange={handleChange}
+                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+             <div className="flex justify-between text-xs text-slate-400 mt-1"><span>1 min</span><span>20 mins</span></div>
+             <p className="text-xs text-slate-500 mt-2 text-center">Note: The final script length is an AI estimate and may vary by +/- 1 minute to ensure a natural story pace.</p>
+        </div>}
         
         {renderSelect('language', 'Language', languageOptions)}
 
-        <button
-          type="submit"
-          disabled={isSuggesting}
-          className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 transition-transform transform hover:scale-105 disabled:bg-indigo-800 disabled:cursor-not-allowed"
-        >
+        <button type="submit" disabled={isSuggesting}
+          className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 transition-transform transform hover:scale-105 disabled:bg-indigo-800 disabled:cursor-not-allowed">
           <MagicIcon />
           Generate Characters & Setting
         </button>

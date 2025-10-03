@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from '@google/genai';
 import { UserInput, CharacterProfile, StoryboardData, AspectRatio, Scene } from '../types';
 
@@ -108,12 +107,12 @@ const promptLocalizations = {
         generateCharacterProfile: (userInput: UserInput, availableVoices: string) => `
             Create a character profile for a short video based on the following user input.
             The profile must include 2-3 main characters and one primary setting.
-            For each character, provide a name and a detailed description that implies their gender (male or female). Also provide a visually-rich description focusing on specific, non-negotiable "visual anchors": facial features, hair style/color, signature wardrobe, and body type. This description is CRITICAL for generating consistent character images later.
+            For each character, provide a name and a detailed description that implies their gender (male or female). Also provide a hyper-detailed, comma-separated, keyword-style description focusing on specific, non-negotiable "visual anchors": facial features, hair style/color, signature wardrobe, and body type. This description must function as a master prompt for an image generator. Example: 'young woman, 20s, long brown hair in a high ponytail, emerald green eyes, sharp jawline, fair skin with freckles, wearing a worn brown leather tunic over a cream-colored shirt, dark trousers, tall leather boots, always carrying a silver locket.' This is CRITICAL for generating consistent character images later.
             CRITICAL VOICE CASTING RULE: You MUST assign a distinct voice for each character from the following available list. Choose a voice whose characteristic (e.g., 'Bright', 'Firm', 'Youthful') best matches the character's personality. Available Voices: ${availableVoices}.
             Finally, you MUST assign a suitable voice for the Narrator, such as one described as 'Informative' or 'Knowledgeable' from the list.
 
             User Input:
-            - Topic: ${userInput.topic}
+            - Topic/Idea: ${userInput.scriptContent}
             - Channel Type: ${userInput.channelType}
             - Video Style: ${userInput.videoStyle}
             - Language: ${userInput.language}
@@ -121,11 +120,26 @@ const promptLocalizations = {
             Respond in ${userInput.language}.
             Return ONLY a single, valid JSON object matching the specified schema.
         `,
+        generateCharacterProfileFromScript: (script: string, availableVoices: string, language: string) => `
+            Read the following script carefully. Your task is to act as a casting director.
+            Identify up to 3 main characters (including the Narrator if present) and the primary setting from the script.
+            For each character, provide a name and a detailed description that implies their gender (male or female). Also provide a hyper-detailed, comma-separated, keyword-style description focusing on specific, non-negotiable "visual anchors": facial features, hair style/color, signature wardrobe, and body type. This description must function as a master prompt for an image generator. Example: 'young woman, 20s, long brown hair in a high ponytail, emerald green eyes, sharp jawline, fair skin with freckles, wearing a worn brown leather tunic over a cream-colored shirt, dark trousers, tall leather boots, always carrying a silver locket.' This is CRITICAL for visual consistency.
+            CRITICAL VOICE CASTING RULE: You MUST assign a distinct voice for each character from the following available list. Choose a voice whose characteristic (e.g., 'Bright', 'Firm', 'Youthful') best matches the character's personality. Available Voices: ${availableVoices}.
+            Finally, describe the setting in detail. The script is your only source of information.
+            
+            SCRIPT:
+            ---
+            ${script}
+            ---
+
+            Respond in ${language}.
+            Return ONLY a single, valid JSON object matching the specified schema.
+        `,
         generateMasterScript: (userInput: UserInput, characterProfile: CharacterProfile, targetWordCount: number, minWordCount: number, maxWordCount: number, wordsPerSecond: number) => `
             You are an expert AI scriptwriter for YouTube videos. Your task is to write a complete, compelling script based on the user's request, following a professional, structured format.
 
             **Core Concept:**
-            - Topic: ${userInput.topic}
+            - Topic: ${userInput.scriptContent}
             - Channel Type: ${userInput.channelType}
             - Style: ${userInput.videoStyle} video, with a ${userInput.writingStyle} tone.
             - Characters: ${JSON.stringify(characterProfile.characters.map(c => c.name))}
@@ -189,31 +203,27 @@ const promptLocalizations = {
 
             2.  **Locked Character & Setting Profiles (Source of Visual Truth):**
                 - Profile: ${JSON.stringify(characterProfile)}
-                - **CRITICAL CONSISTENCY RULE:** For the 'master_description' field, find the character speaking or acting in the scene and insert their FULL, UNCHANGED description from this Profile. If no specific character is active (e.g., narrator-only scene), use the Setting's description.
+                - **CRITICAL CONSISTENCY RULE:** For the 'master_description' field, find the character acting in the scene and insert their FULL, UNCHANGED, hyper-detailed description from this Profile. This is the **absolute source of visual truth**.
 
             3.  **Locked Voices (Source of Audio Truth):**
-                - **CRITICAL VOICE CONSISTENCY:** For the 'voice_name' field, you MUST find the character speaking ('speaker') and use the exact voice name assigned to them in the Character Profile above. If the speaker is "Narrator", use the assigned 'narratorVoice'.
+                - **CRITICAL VOICE CONSISTENCY:** For the 'voice_name' field, you MUST find the character speaking ('speaker') and use the exact voice name assigned to them in the Character Profile. If the speaker is "Narrator", use the assigned 'narratorVoice'.
 
             4.  **Core Cinematic & Style Rules:**
-                - **ABSOLUTELY CRITICAL STYLE RULE:** The 'style_notes' field is the most important instruction for visual generation. It MUST be a detailed string that explicitly defines the visual characteristics of both the video and image style. This exact string will be used to generate the visuals, so it must be comprehensive and accurate. Example: "Video Style: Cinematic, Image Style: Cinematic - characterized by high-contrast lighting, deep shadows, smooth camera movements, and a shallow depth of field." This note must be applied UNIFORMLY to EVERY scene without fail.
-                - **PROFESSIONAL CINEMATOGRAPHY:** For the 'camera_shot' field, suggest a professional camera shot that would best capture the moment (e.g., "Close-up on the character's reaction", "Wide establishing shot of the city", "Dynamic tracking shot following the action", "Point of View (POV) shot").
-                - **CRITICAL AUDIO RULE:** For the 'audio_description', write a brief, narrative description of the scene's soundscape based on the script's context. Example: 'A gentle wind rustles through dry autumn leaves, creating a soft, whispering soundscape.'
-                - **CRITICAL DIALOGUE LENGTH RULE:** A single scene's 'dialogue_line' MUST NOT exceed 13 words. If a line of dialogue or narration from the Master Script is longer than 13 words, you MUST split it into multiple consecutive scenes. Each of these new scenes will contain a segment of the original line (max 13 words).
+                - **ABSOLUTELY CRITICAL STYLE RULE:** The 'style_notes' field is the most important instruction for visual generation. It MUST be a detailed, prescriptive string. For example, if the style is '2D Animation', your notes MUST include keywords like '2D vector art, flat color palette, cel-shaded, clean line art, anime-inspired'. If the style is 'Cinematic', notes must include 'high-contrast lighting, deep shadows, smooth camera movements'. Apply this UNIFORMLY to EVERY scene.
+                - **CRITICAL LOGIC RULE ('character_name' vs. 'speaker'):** These two fields serve different purposes. 'speaker' is ONLY the name of the character/narrator who is delivering the 'dialogue_line'. 'character_name' is the character who is the MAIN VISUAL FOCUS of the scene. They can be different. For example, if the script says "NARRATOR: The Inventor works tirelessly", then 'speaker' is "Narrator" and 'character_name' is "The Inventor". You must follow this logic precisely.
+                - **PROFESSIONAL CINEMATOGRAPHY:** For 'camera_shot', suggest a professional camera shot that best captures the moment (e.g., "Close-up on reaction", "Wide establishing shot").
+                - **CRITICAL AUDIO RULE:** For 'audio_description', briefly describe the scene's soundscape.
+                - **CRITICAL DIALOGUE LENGTH RULE:** A single scene's 'dialogue_line' MUST NOT exceed 13 words. If a line is longer, you MUST split it into multiple consecutive scenes.
 
             5.  **CRITICAL CINEMATIC RULE FOR LONG DIALOGUE:**
-                - When a line of dialogue or narration from the Master Script is longer than 13 words and you must split it into multiple consecutive scenes, you **MUST NOT** repeat the 'scene_description' and 'camera_shot' identically.
-                - Instead, treat this as a mini-sequence and apply cinematic techniques to make it dynamic:
-                    - **Vary Camera Shots:** Start with a medium shot, then cut to a close-up on the next line to emphasize emotion.
-                    - **Use Reaction Shots:** If another character is present, cut to their reaction.
-                    - **Use Cutaways:** If the dialogue describes an object or place, show a shot of that object/place.
-                    - **Introduce Subtle Actions:** Have the character perform a small action (e.g., sip coffee, look away) and describe it in the 'scene_description'.
-                - **The goal is for each consecutive scene to offer a slightly different visual perspective, even as the same character continues speaking.**
+                - When splitting a long line into multiple scenes, you **MUST NOT** repeat the 'scene_description' and 'camera_shot' identically.
+                - Vary the visuals: use different camera shots (medium, close-up), show reaction shots of other characters, or describe small actions the speaker is performing to make the sequence dynamic.
 
             **--- END OF DIRECTOR'S BIBLE ---**
         `,
         breakdownTask: (chunk: string, language: string) => `
             **Your Task:**
-            Your task is to act as an AI Video Director. Read the provided SCRIPT CHUNK below and break it down into a series of detailed scenes.
+            You are an AI Video Director. Read the provided SCRIPT CHUNK below and break it down into a series of detailed scenes.
             You MUST follow all rules in The Director's Bible.
             The script provided is only a small part of a larger story. Only process the chunk provided.
 
@@ -245,12 +255,12 @@ const promptLocalizations = {
         generateCharacterProfile: (userInput: UserInput, availableVoices: string) => `
             Tạo hồ sơ nhân vật cho một video ngắn dựa trên thông tin người dùng sau đây.
             Hồ sơ phải bao gồm 2-3 nhân vật chính và một bối cảnh chính.
-            Đối với mỗi nhân vật, hãy cung cấp tên và một mô tả chi tiết ngụ ý giới tính của họ (nam hoặc nữ). Đồng thời cung cấp mô tả giàu hình ảnh, tập trung vào các "đặc điểm nhận dạng" cụ thể, không thể thay đổi: nét mặt, kiểu/màu tóc, trang phục đặc trưng và dáng người. Mô tả này CỰC KỲ QUAN TRỌNG để tạo ra hình ảnh nhân vật nhất quán sau này.
+            Đối với mỗi nhân vật, hãy cung cấp tên và một mô tả chi tiết ngụ ý giới tính của họ (nam hoặc nữ). Đồng thời cung cấp một mô tả siêu chi tiết, theo kiểu từ khóa, phân tách bằng dấu phẩy, tập trung vào các "đặc điểm nhận dạng" cụ thể, không thể thay đổi: nét mặt, kiểu/màu tóc, trang phục đặc trưng và dáng người. Mô tả này phải hoạt động như một prompt gốc cho một trình tạo hình ảnh. Ví dụ: 'phụ nữ trẻ, 20 tuổi, tóc nâu dài buộc đuôi ngựa cao, mắt xanh lục bảo, đường hàm sắc nét, da trắng có tàn nhang, mặc áo tunic da màu nâu đã sờn bên ngoài áo sơ mi màu kem, quần tối màu, bốt da cao cổ, luôn mang theo một chiếc mề đay bạc.' Mô tả này CỰC KỲ QUAN TRỌNG để tạo ra hình ảnh nhân vật nhất quán sau này.
             QUY TẮC CHỌN GIỌNG NÓI TỐI QUAN TRỌNG: Bạn PHẢI gán một giọng nói riêng biệt cho mỗi nhân vật từ danh sách có sẵn sau. Hãy chọn một giọng nói có đặc tính (ví dụ: 'Tươi sáng', 'Firm', 'Trẻ trung') phù hợp nhất với tính cách của nhân vật. Danh sách giọng nói có sẵn: ${availableVoices}.
             Cuối cùng, bạn PHẢI gán một giọng nói phù hợp cho Người Dẫn Chuyện, chẳng hạn như một giọng được mô tả là 'Cung cấp nhiều thông tin' hoặc 'Hiểu biết' từ danh sách.
 
             Thông tin người dùng:
-            - Chủ đề: ${userInput.topic}
+            - Chủ đề/Ý tưởng: ${userInput.scriptContent}
             - Thể loại kênh: ${userInput.channelType}
             - Phong cách video: ${userInput.videoStyle}
             - Ngôn ngữ: ${userInput.language}
@@ -258,11 +268,26 @@ const promptLocalizations = {
             Phản hồi bằng ngôn ngữ ${userInput.language}.
             Chỉ trả về MỘT đối tượng JSON hợp lệ duy nhất khớp với schema đã chỉ định.
         `,
+        generateCharacterProfileFromScript: (script: string, availableVoices: string, language: string) => `
+            Đọc kỹ kịch bản sau. Nhiệm vụ của bạn là đóng vai một đạo diễn tuyển vai.
+            Hãy xác định tối đa 3 nhân vật chính (bao gồm cả Người dẫn chuyện nếu có) và bối cảnh chính từ kịch bản.
+            Đối với mỗi nhân vật, hãy cung cấp tên và một mô tả chi tiết ngụ ý giới tính của họ (nam hoặc nữ). Đồng thời cung cấp một mô tả siêu chi tiết, theo kiểu từ khóa, phân tách bằng dấu phẩy, tập trung vào các "đặc điểm nhận dạng" cụ thể, không thể thay đổi: nét mặt, kiểu/màu tóc, trang phục đặc trưng và dáng người. Mô tả này phải hoạt động như một prompt gốc cho một trình tạo hình ảnh. Ví dụ: 'phụ nữ trẻ, 20 tuổi, tóc nâu dài buộc đuôi ngựa cao, mắt xanh lục bảo, đường hàm sắc nét, da trắng có tàn nhang, mặc áo tunic da màu nâu đã sờn bên ngoài áo sơ mi màu kem, quần tối màu, bốt da cao cổ, luôn mang theo một chiếc mề đay bạc.' Điều này CỰC KỲ QUAN TRỌNG cho sự nhất quán về mặt hình ảnh.
+            QUY TẮC CHỌN GIỌNG NÓI TỐI QUAN TRỌNG: Bạn PHẢI gán một giọng nói riêng biệt cho mỗi nhân vật từ danh sách có sẵn sau. Hãy chọn một giọng nói có đặc tính (ví dụ: 'Tươi sáng', 'Firm', 'Trẻ trung') phù hợp nhất với tính cách của nhân vật. Danh sách giọng nói có sẵn: ${availableVoices}.
+            Cuối cùng, hãy mô tả chi tiết bối cảnh. Kịch bản là nguồn thông tin duy nhất của bạn.
+            
+            KỊCH BẢN:
+            ---
+            ${script}
+            ---
+
+            Phản hồi bằng ngôn ngữ ${language}.
+            Chỉ trả về MỘT đối tượng JSON hợp lệ duy nhất khớp với schema đã chỉ định.
+        `,
         generateMasterScript: (userInput: UserInput, characterProfile: CharacterProfile, targetWordCount: number, minWordCount: number, maxWordCount: number, wordsPerSecond: number) => `
             Bạn là một chuyên gia viết kịch bản AI cho video YouTube. Nhiệm vụ của bạn là viết một kịch bản hoàn chỉnh, hấp dẫn dựa trên yêu cầu của người dùng, theo một định dạng chuyên nghiệp và có cấu trúc.
 
             **Ý Tưởng Cốt Lõi:**
-            - Chủ đề: ${userInput.topic}
+            - Chủ đề: ${userInput.scriptContent}
             - Thể loại kênh: ${userInput.channelType}
             - Phong cách: Video ${userInput.videoStyle}, với giọng văn ${userInput.writingStyle}.
             - Nhân vật: ${JSON.stringify(characterProfile.characters.map(c => c.name))}
@@ -319,6 +344,10 @@ const promptLocalizations = {
             **KINH THÁNH CỦA ĐẠO DIỄN (QUY TẮC BẤT BIẾN):**
             Đây là nguồn chân lý cho toàn bộ dự án. Tuân thủ nghiêm ngặt trong mọi cảnh bạn tạo ra.
 
+            **QUY TẮC NGÔN NGỮ HYBRID TUYỆT ĐỐI QUAN TRỌNG (ÁP DỤNG CHO DỰ ÁN TIẾNG VIỆT):**
+            - **NGOẠI LỆ DUY NHẤT:** Trường \`dialogue_line\` PHẢI được giữ nguyên bằng **Tiếng Việt**.
+            - **QUY TẮC CHUNG:** TẤT CẢ CÁC TRƯỜNG CÒN LẠI (\`master_description\`, \`scene_description\`, \`camera_shot\`, \`audio_description\`, \`style_notes\`, etc.) PHẢI được tạo ra bằng **Tiếng Anh (ENGLISH)**. Điều này là để đảm bảo khả năng tương thích và tránh các bộ lọc an toàn. Không có ngoại lệ nào khác.
+
             1.  **Ý Tưởng Cốt Lõi:**
                 - Phong cách: Video ${userInput.videoStyle}, hình ảnh ${userInput.imageStyle}, giọng văn ${userInput.writingStyle}.
                 - Ngôn ngữ: ${userInput.language}
@@ -326,25 +355,21 @@ const promptLocalizations = {
 
             2.  **Hồ sơ Nhân vật & Bối cảnh Đã khóa (Nguồn Chân lý Hình ảnh):**
                 - Hồ sơ: ${JSON.stringify(characterProfile)}
-                - **QUY TẮC NHẤT QUÁN TỐI QUAN TRỌNG:** Đối với trường 'master_description', hãy tìm nhân vật đang nói hoặc hành động trong cảnh và chèn mô tả ĐẦY ĐỦ, KHÔNG THAY ĐỔI của họ từ Hồ sơ này. Nếu không có nhân vật cụ thể nào hoạt động, hãy sử dụng mô tả của Bối cảnh.
+                - **QUY TẮC NHẤT QUÁN TỐI QUAN TRỌNG:** Đối với trường 'master_description', hãy tìm nhân vật đang hành động trong cảnh và chèn mô tả siêu chi tiết, ĐẦY ĐỦ, KHÔNG THAY ĐỔI của họ từ Hồ sơ này. Đây là nguồn chân lý tuyệt đối về mặt hình ảnh.
 
             3.  **Giọng nói Đã khóa (Nguồn Chân lý Âm thanh):**
-                - **NHẤT QUÁN GIỌNG NÓI TỐI QUAN TRỌNG:** Đối với trường 'voice_name', bạn PHẢI tìm nhân vật đang nói ('speaker') và sử dụng đúng tên mô hình giọng nói đã được gán cho họ trong Hồ sơ Nhân vật ở trên. Nếu người nói là "Narrator" (Người dẫn chuyện), hãy sử dụng 'narratorVoice' đã được gán.
+                - **NHẤT QUÁN GIỌNG NÓI TỐI QUAN TRỌNG:** Đối với trường 'voice_name', bạn PHẢI tìm nhân vật đang nói ('speaker') và sử dụng đúng tên mô hình giọng nói đã được gán cho họ trong Hồ sơ Nhân vật. Nếu người nói là "Người dẫn chuyện", hãy sử dụng 'narratorVoice'.
 
             4.  **Quy tắc Điện ảnh & Phong cách Cốt lõi:**
-                - **QUY TẮC PHONG CÁCH TUYỆT ĐỐI QUAN TRỌNG:** Trường 'style_notes' là hướng dẫn quan trọng nhất để tạo hình ảnh. Nó PHẢI là một chuỗi chi tiết xác định rõ ràng các đặc điểm hình ảnh của cả phong cách video và hình ảnh. Chuỗi này sẽ được sử dụng để tạo ra hình ảnh, vì vậy nó phải toàn diện và chính xác. Ví dụ: "Phong cách Video: Điện ảnh, Phong cách Hình ảnh: Điện ảnh - đặc trưng bởi ánh sáng tương phản cao, bóng sâu, chuyển động máy quay mượt mà và độ sâu trường ảnh nông." Ghi chú này phải được áp dụng ĐỒNG NHẤT cho MỌI cảnh.
-                - **QUAY PHIM CHUYÊN NGHIỆP:** Đối với trường 'camera_shot', hãy đề xuất một góc máy chuyên nghiệp để ghi lại khoảnh khắc tốt nhất (ví dụ: "Cận cảnh phản ứng của nhân vật", "Toàn cảnh thiết lập thành phố").
-                - **QUY TẮC ÂM THANH:** Đối với 'audio_description', hãy viết một mô tả ngắn gọn về âm thanh của cảnh dựa trên bối cảnh kịch bản. Ví dụ: 'Một cơn gió nhẹ xào xạc qua những chiếc lá khô mùa thu, tạo ra một không gian âm thanh thì thầm, nhẹ nhàng.'
-                - **QUY TẮC ĐỘ DÀI LỜI THOẠI:** 'dialogue_line' của một cảnh KHÔNG ĐƯỢC vượt quá 13 từ. Nếu một dòng thoại hoặc lời dẫn từ Kịch bản Gốc dài hơn 13 từ, bạn PHẢI chia nó thành nhiều cảnh liên tiếp.
+                - **QUY TẮC PHONG CÁCH TUYỆT ĐỐI QUAN TRỌNG:** Trường 'style_notes' là hướng dẫn quan trọng nhất để tạo hình ảnh. Nó PHẢI là một chuỗi chi tiết, mang tính mệnh lệnh. Ví dụ, nếu phong cách là 'Hoạt hình 2D', ghi chú của bạn PHẢI bao gồm các từ khóa như '2D vector art, flat color palette, cel-shaded, clean line art, anime-inspired'. Nếu là 'Điện ảnh', ghi chú phải bao gồm 'high-contrast lighting, deep shadows, smooth camera movements'. Áp dụng ĐỒNG NHẤT cho MỌI cảnh.
+                - **QUY TẮC LOGIC TỐI QUAN TRỌNG ('character_name' vs 'speaker'):** Hai trường này có mục đích khác nhau. 'speaker' CHỈ là tên của nhân vật/người dẫn chuyện đang đọc lời thoại 'dialogue_line'. 'character_name' là nhân vật đang là TÂM ĐIỂM HÌNH ẢNH CHÍNH của cảnh. Chúng có thể khác nhau. Ví dụ, nếu kịch bản ghi "NGƯỜI DẪN CHUYỆN: Nhà phát minh làm việc không mệt mỏi.", thì 'speaker' là "Người dẫn chuyện" và 'character_name' là "Nhà phát minh". Bạn phải tuân thủ logic này một cách chính xác.
+                - **QUAY PHIM CHUYÊN NGHIỆP:** Đối với 'camera_shot', hãy đề xuất một góc máy chuyên nghiệp (ví dụ: "Cận cảnh phản ứng", "Toàn cảnh thiết lập").
+                - **QUY TẮC ÂM THANH:** Đối với 'audio_description', mô tả ngắn gọn âm thanh của cảnh.
+                - **QUY TẮC ĐỘ DÀI LỜI THOẠI:** 'dialogue_line' của một cảnh KHÔNG ĐƯỢC vượt quá 13 từ. Nếu dài hơn, PHẢI chia thành nhiều cảnh liên tiếp.
 
             5.  **QUY TẮC ĐIỆN ẢNH CHO LỜI THOẠI DÀI:**
-                - Khi một dòng thoại dài hơn 13 từ và bạn phải chia nó thành nhiều cảnh, bạn **KHÔNG ĐƯỢỢC** lặp lại 'scene_description' và 'camera_shot' một cách y hệt.
-                - Thay vào đó, hãy coi đây là một chuỗi cảnh quay và áp dụng các kỹ thuật điện ảnh:
-                    - **Thay đổi góc máy:** Bắt đầu bằng cảnh trung, sau đó chuyển sang cận cảnh ở dòng tiếp theo để nhấn mạnh cảm xúc.
-                    - **Sử dụng cảnh quay phản ứng:** Cắt cảnh sang phản ứng của một nhân vật khác.
-                    - **Sử dụng cảnh quay xen kẽ:** Nếu lời thoại mô tả một đối tượng, hãy hiển thị cảnh quay của đối tượng đó.
-                    - **Thêm hành động nhỏ:** Cho nhân vật thực hiện một hành động nhỏ (ví dụ: nhấp một ngụm cà phê) và mô tả nó trong 'scene_description'.
-                - **Mục tiêu là mỗi cảnh liên tiếp cung cấp một góc nhìn hình ảnh hơi khác một chút.**
+                - Khi chia một câu thoại dài thành nhiều cảnh, bạn **KHÔNG ĐƯỢC** lặp lại 'scene_description' và 'camera_shot' y hệt nhau.
+                - Thay vào đó, hãy thay đổi hình ảnh: sử dụng các góc máy khác nhau (trung cảnh, cận cảnh), chiếu cảnh phản ứng của các nhân vật khác, hoặc mô tả các hành động nhỏ mà người nói đang thực hiện để làm cho chuỗi cảnh trở nên sống động.
 
             **--- KẾT THÚC KINH THÁNH CỦA ĐẠO DIỄN ---**
         `,
@@ -362,7 +387,7 @@ const promptLocalizations = {
             **Hướng dẫn:**
             1. Chia nhỏ ĐOẠN KỊCH BẢN thành các cảnh, bảo toàn mạch truyện.
             2. Chuyển thể mọi hành động, lời thoại và lời dẫn quan trọng thành một cảnh riêng biệt.
-            3. Chỉ trả về MỘT đối tượng JSON hợp lệ duy nhất tuân thủ nghiêm ngặt schema được cung cấp, chứa một mảng các cảnh bạn đã tạo cho đoạn này. Đảm bảo tất cả văn bản đều bằng ${language}.
+            3. Chỉ trả về MỘT đối tượng JSON hợp lệ duy nhất tuân thủ nghiêm ngặt schema được cung cấp, chứa một mảng các cảnh bạn đã tạo cho đoạn này. TUYỆT ĐỐI tuân thủ **QUY TẮC NGÔN NGỮ HYBRID** và **QUY TẮC LOGIC** đã được nêu trong Kinh Thánh Của Đạo Diễn.
         `,
         promoTask: (masterScript: string, language: string) => `
             **Nhiệm vụ của bạn:**
@@ -374,7 +399,10 @@ const promptLocalizations = {
             ---
 
             **Hướng dẫn:**
-            Tạo các tài liệu quảng cáo bằng ${language} dựa trên câu chuyện tổng thể.
+            **QUY TẮC NGÔN NGỮ KẾT HỢP (HYBRID LANGUAGE):**
+            - Viết các trường sau bằng **${language}**: \`title\`, \`description\`, \`hashtags\`, \`caption\`.
+            - Riêng trường \`thumbnail_prompt\` PHẢI được viết bằng **Tiếng Anh (English)** để tối ưu hóa cho các mô hình tạo ảnh.
+            
             Chỉ trả về MỘT đối tượng JSON hợp lệ duy nhất tuân thủ nghiêm ngặt schema được cung cấp cho nội dung quảng cáo.
         `
     }
@@ -470,8 +498,6 @@ const generateText = async (
                     systemInstruction: safetyInstruction,
                 },
             });
-            // FIX: Add a safeguard. If response.text is undefined for any reason,
-            // return an empty string to prevent downstream crashes.
             return response.text || '';
         } catch (error) {
             const failedKey = apiKeys[(keyIndex - 1 + apiKeys.length) % apiKeys.length];
@@ -519,41 +545,80 @@ export const getStyleSuggestions = async (
   return generateJson<{ imageStyle: string; writingStyle: string }>(prompt, schema, apiKeys);
 };
 
+export const getStyleSuggestionsFromScript = async (
+  script: string,
+  styleOptions: string[],
+  apiKeys: string[]
+): Promise<{ videoStyle: string; imageStyle: string }> => {
+  const prompt = `
+    Analyze the following script to understand its genre, tone, and content. Based on your analysis, suggest the most appropriate Video Style and Image Style from the provided lists.
+    
+    Script:
+    """
+    ${script.substring(0, 2000)}... 
+    """
+
+    Available Styles (for both video and image): ${styleOptions.join(', ')}
+
+    Return ONLY a single, valid JSON object with your suggestions, using the exact string values from the lists provided.
+    The JSON object must have two keys: "videoStyle" and "imageStyle".
+  `;
+
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      videoStyle: { type: Type.STRING },
+      imageStyle: { type: Type.STRING },
+    },
+    required: ['videoStyle', 'imageStyle'],
+  };
+
+  return generateJson<{ videoStyle: string; imageStyle: string }>(prompt, schema, apiKeys);
+};
+
+const characterProfileSchema = {
+    type: Type.OBJECT,
+    properties: {
+        characters: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING, description: "Character's name." },
+                    description: { type: Type.STRING, description: "Detailed visual and personality description, including specific visual anchors." },
+                    voice: { type: Type.STRING, description: `The assigned voice model for the character from the available list.` }
+                },
+                required: ["name", "description", "voice"]
+            }
+        },
+        setting: {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING, description: "Name of the setting." },
+                description: { type: Type.STRING, description: "Detailed description of the setting." }
+            },
+            required: ["name", "description"]
+        },
+        narratorVoice: { type: Type.STRING, description: `The assigned voice model for the narrator from the available list.` }
+    },
+    required: ["characters", "setting", "narratorVoice"]
+};
+
+
 export const generateCharacterProfile = async (userInput: UserInput, apiKeys: string[]): Promise<CharacterProfile> => {
     const prompts = getPrompts(userInput.language);
     const availableVoices = getAvailableVoices(userInput.language).join(', ');
     const prompt = prompts.generateCharacterProfile(userInput, availableVoices);
-    
-    const schema = {
-        type: Type.OBJECT,
-        properties: {
-            characters: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        name: { type: Type.STRING, description: "Character's name." },
-                        description: { type: Type.STRING, description: "Detailed visual and personality description, including specific visual anchors." },
-                        voice: { type: Type.STRING, description: `The assigned voice model for the character from the list: ${availableVoices}.` }
-                    },
-                    required: ["name", "description", "voice"]
-                }
-            },
-            setting: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING, description: "Name of the setting." },
-                    description: { type: Type.STRING, description: "Detailed description of the setting." }
-                },
-                required: ["name", "description"]
-            },
-            narratorVoice: { type: Type.STRING, description: `The assigned voice model for the narrator from the list: ${availableVoices}.` }
-        },
-        required: ["characters", "setting", "narratorVoice"]
-    };
-
-    return generateJson<CharacterProfile>(prompt, schema, apiKeys);
+    return generateJson<CharacterProfile>(prompt, characterProfileSchema, apiKeys);
 };
+
+export const generateCharacterProfileFromScript = async (userInput: UserInput, apiKeys: string[]): Promise<CharacterProfile> => {
+    const prompts = getPrompts(userInput.language);
+    const availableVoices = getAvailableVoices(userInput.language).join(', ');
+    const prompt = prompts.generateCharacterProfileFromScript(userInput.scriptContent, availableVoices, userInput.language);
+    return generateJson<CharacterProfile>(prompt, characterProfileSchema, apiKeys);
+};
+
 
 export const generateMasterScript = async (userInput: UserInput, characterProfile: CharacterProfile, apiKeys: string[]): Promise<string> => {
     const wordsPerSecond = 1.625; // Based on 13 words per 8-second scene for accurate pacing.
@@ -587,15 +652,15 @@ export const breakdownScriptIntoScenes = async (userInput: UserInput, characterP
                 },
                 required: ["scene_number", "total_scenes"]
             },
-            character_name: { type: Type.STRING, description: "Name of the main character in this scene, or the setting name if no character is present." },
+            character_name: { type: Type.STRING, description: "Name of the main character in visual focus in this scene." },
             master_description: { type: Type.STRING, description: "The full, original, unchanged description of the character (or setting) from the profile. This is the source of truth for visual consistency." },
-            scene_description: { type: Type.STRING, description: "A visual description of the character's specific actions, expressions, and the setting in this scene, translated from the master script." },
-            dialogue_line: { type: Type.STRING, description: "The character's or narrator's line of dialogue, copied exactly from the master script. Can be empty." },
-            speaker: { type: Type.STRING, description: "The name of the character speaking or 'Narrator'. Copied exactly from the master script. Can be empty." },
+            scene_description: { type: Type.STRING, description: "A visual description of the scene's action. If language is Vietnamese, this MUST be in ENGLISH." },
+            dialogue_line: { type: Type.STRING, description: "The character's or narrator's line of dialogue. Can be empty." },
+            speaker: { type: Type.STRING, description: "The name of the character speaking or 'Narrator'. Can be empty." },
             voice_name: { type: Type.STRING, description: "The specific pre-defined friendly voice name for the speaking character or narrator (e.g., 'Zephyr', 'Kore')." },
             camera_shot: { type: Type.STRING, description: "A professional suggestion for the camera shot (e.g., 'Close-up', 'Wide shot')." },
             audio_description: { type: Type.STRING, description: "A narrative description of the scene's soundscape." },
-            style_notes: { type: Type.STRING, description: "CRITICAL: A detailed string defining the visual style of the video and image." }
+            style_notes: { type: Type.STRING, description: "CRITICAL: A detailed, prescriptive string defining the visual style of the video and image." }
         },
         required: ["scene_context", "character_name", "master_description", "scene_description", "audio_description", "style_notes", "camera_shot", "voice_name"]
      };
@@ -689,10 +754,10 @@ export const breakdownScriptIntoScenes = async (userInput: UserInput, characterP
             let friendlyVoice = prompt.voice_name; 
             
             // In case the AI hallucinates a name, let's find the correct one from the profile
-            if (speakerName.toUpperCase() === narratorName) {
+            if (speakerName.toUpperCase() === narratorName.toUpperCase()) {
                 friendlyVoice = characterProfile.narratorVoice;
             } else {
-                const char = characterProfile.characters.find(c => c.name === speakerName);
+                const char = characterProfile.characters.find(c => c.name.toUpperCase() === speakerName.toUpperCase());
                 if (char) {
                     friendlyVoice = char.voice;
                 }
